@@ -1,4 +1,4 @@
-// Union Vault Partners portal. Plain JavaScript, no build step. All data comes from the shared Supabase project
+// Union Vault Vendors portal. Plain JavaScript, no build step. All data comes from the shared Supabase project
 // through functions/policies defined in the main repo (supabase/migrations/20261110…, 20261111…, 20261112…).
 (function () {
   'use strict';
@@ -32,7 +32,7 @@
 
   const S = { user: null, role: null, tab: null, msg: null };
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
-    <div class="top"><div class="brand">UnionVault<span class="pill">Partners</span></div>
+    <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
     <div class="tabs">${tabs.map(([k, l]) => `<button class="tab${S.tab === k ? ' on' : ''}" data-act="tab" data-tab="${k}">${l}</button>`).join('')}</div>
     <div class="who">${esc(S.user && S.user.email)} &nbsp;·&nbsp; <a href="#" data-act="signout">Sign out</a></div></div>
     <div class="wrap">${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}${body}</div>`;
@@ -41,7 +41,7 @@
 
   // ── login ──
   function loginView(sent) {
-    app.innerHTML = `<div class="login"><div class="brand" style="font-size:26px">UnionVault<span class="pill">Partners</span></div>
+    app.innerHTML = `<div class="login"><div class="brand" style="font-size:26px">UnionVault<span class="pill">Vendors</span></div>
       <h1 style="margin-top:28px">Sign in</h1><p>Enter the email address we have for you. We’ll send a one-tap sign-in link.</p>
       ${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}
       ${sent ? '<div class="note ok">Check your inbox for the sign-in link.</div>' : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" required></div><button class="btn primary" style="width:100%">Email me a sign-in link</button></form>`}
@@ -69,7 +69,7 @@
       <div class="tablewrap"><table><tr><th>When</th><th>Button</th><th>Visitor</th></tr>${(recent || []).map(r => `<tr><td>${fmtWhen(r.clicked_at)}</td><td>${esc(LINKS[r.link] || r.link)}</td><td class="mono">${esc(r.visitor_id)}</td></tr>`).join('') || '<tr><td colspan="3" class="sub">No clicks yet.</td></tr>'}</table></div>
       <div class="eyebrow">Referred sign-ups</div>
       <div class="tablewrap"><table><tr><th>Referred user</th><th>Signed up</th><th>Status</th></tr>${(refs || []).map(r => `<tr><td class="mono">${esc(r.anon_id)}</td><td>${fmtDay(r.signed_up_at)}</td><td>${esc(status[r.subscription_status] || r.subscription_status)}</td></tr>`).join('') || '<tr><td colspan="3" class="sub">No sign-ups yet.</td></tr>'}</table></div>
-      <div class="sub" style="margin-top:8px">Visitors and referred users are shown by an anonymous ID only. IDs are different for each partner.</div>`;
+      <div class="sub" style="margin-top:8px">Visitors and referred users are shown by an anonymous ID only. IDs are different for each vendor.</div>`;
   }
 
   const FIELDS = [['name', 'Business name'], ['category_label', 'Category'], ['phone', 'Phone'], ['email', 'Email'], ['area', 'Service area'], ['hours', 'Opening hours'], ['website_url', 'Website link'], ['contact_url', 'Contact form link'], ['instagram_url', 'Instagram link']];
@@ -100,10 +100,10 @@
   async function adminOverview() {
     const [ov, ch, rc] = await Promise.all([api.rpc('admin_partner_overview', { p_days: C.clickDays }), api.select('vendor_profile_changes', { eq: { status: 'pending' } }), api.rpc('admin_recent_clicks', { p_limit: 40 })]);
     const sum = k => (ov || []).reduce((a, r) => a + Number(r[k] || 0), 0);
-    return `<div class="head"><div><h1>All partners</h1><div class="sub">Last ${C.clickDays} days</div></div></div>
-      <div class="grid">${stat('Clicks to partners', sum('clicks'), '')}${stat('Referred sign-ups', sum('signups'), '')}${stat('Paying referred', sum('paying'), '')}${stat('Commission earned', money(sum('commission_cents')), 'all time')}</div>
-      <div class="eyebrow">Partners</div>
-      <div class="tablewrap"><table><tr><th>Partner</th><th>Clicks</th><th>Contact form</th><th>Calls / emails</th><th>Sign-ups</th><th>Paying</th><th>Commission</th></tr>${(ov || []).map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${r.clicks}</td><td>${r.contact_form}</td><td>${r.calls_emails}</td><td>${r.signups}</td><td>${r.paying}</td><td>${money(r.commission_cents)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">No partners yet.</td></tr>'}</table></div>
+    return `<div class="head"><div><h1>All vendors</h1><div class="sub">Last ${C.clickDays} days</div></div></div>
+      <div class="grid">${stat('Clicks to vendors', sum('clicks'), '')}${stat('Referred sign-ups', sum('signups'), '')}${stat('Paying referred', sum('paying'), '')}${stat('Commission earned', money(sum('commission_cents')), 'all time')}</div>
+      <div class="eyebrow">Vendors</div>
+      <div class="tablewrap"><table><tr><th>Vendor</th><th>Clicks</th><th>Contact form</th><th>Calls / emails</th><th>Sign-ups</th><th>Paying</th><th>Commission</th></tr>${(ov || []).map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${r.clicks}</td><td>${r.contact_form}</td><td>${r.calls_emails}</td><td>${r.signups}</td><td>${r.paying}</td><td>${money(r.commission_cents)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">No partners yet.</td></tr>'}</table></div>
       <div class="eyebrow">Profile changes to review (${(ch || []).length})</div>
       ${(ch || []).map(c => `<div class="card"><b>${esc(c.vendor_id)}</b> <span class="sub">· ${fmtWhen(c.submitted_at)}</span><div class="mono" style="font-size:12px;margin:8px 0">${Object.entries(c.proposed || {}).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join('<br>')}</div>
         <button class="btn primary" data-act="review" data-id="${esc(c.id)}" data-ok="1">Approve</button> <button class="btn" data-act="review" data-id="${esc(c.id)}" data-ok="0">Reject</button></div>`).join('') || '<div class="sub">Nothing waiting.</div>'}
@@ -119,7 +119,7 @@
       else if (S.role === 'vendor') {
         tabs = [['dashboard', 'Dashboard'], ['profile', 'My profile'], ['terms', 'Terms']]; if (!S.tab) S.tab = 'dashboard';
         body = S.tab === 'profile' ? await vendorProfile() : S.tab === 'terms' ? await vendorTerms() : await vendorDashboard();
-      } else { tabs = []; body = '<div class="note">Your account isn’t linked to a partner yet. Please contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</div>'; }
+      } else { tabs = []; body = '<div class="note">Your account isn’t linked to a vendor listing yet. Please contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</div>'; }
       app.innerHTML = shell(tabs, body);
     } catch (e) { console.error(e); app.innerHTML = shell([], `<div class="note err">Something went wrong loading this page. ${esc(e.message || e)}</div>`); }
     S.msg = null;

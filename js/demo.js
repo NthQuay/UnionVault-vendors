@@ -22,7 +22,7 @@ window.PORTAL_DEMO = function (kind) {
   const T = {
     vendor_profiles: [profile],
     vendor_profile_changes: kind === 'admin' ? [{ id: 'c1', vendor_id: 'storyline', status: 'pending', submitted_at: new Date().toISOString(), proposed: { hours: 'Open daily 9am–5pm', phone: '0475 296 057' } }] : [],
-    partner_terms: [{ id: 't1', version: '2026-11', title: 'Partner terms (sample)', body_md: 'This is sample text for design review.\n\n1. Commission is paid quarterly in arrears.\n2. Links are disclosed as sponsored.\n3. …' }],
+    partner_terms: [{ id: 't1', version: '2026-11', title: 'Vendor terms (sample)', body_md: 'This is sample text for design review.\n\n1. Commission is paid quarterly in arrears.\n2. Links are disclosed as sponsored.\n3. …' }],
     partner_terms_acceptances: []
   };
   return {
