@@ -49,27 +49,39 @@
   }
 
   // ── vendor ──
-  async function vendorDashboard() {
+  async function loadVendorData() {
     const [clicks, recent, sum, refs] = await Promise.all([api.rpc('vendor_click_summary', { p_days: C.clickDays }), api.rpc('vendor_recent_clicks', { p_limit: 15 }), api.rpc('partner_summary'), api.rpc('partner_referrals')]);
-    const by = {}; const perDay = {};
+    const by = {}, perDay = {};
     (clicks || []).forEach(r => { by[r.link] = (by[r.link] || 0) + Number(r.clicks); perDay[r.day] = (perDay[r.day] || 0) + Number(r.clicks); });
-    const total = Object.values(by).reduce((a, b) => a + b, 0);
+    return { by, perDay, recent, sum, refs, total: Object.values(by).reduce((a, b) => a + b, 0) };
+  }
+  // Overview: how the listing is performing, plus a short referral summary.
+  async function vendorOverview() {
+    const { by, perDay, recent, sum, total } = await loadVendorData();
     const days = Object.keys(perDay).sort().map(d => perDay[d]);
     const pct = n => total ? Math.round((n / total) * 100) + '%' : '';
-    const link = `${C.appUrl}/?ref=${encodeURIComponent(sum.code)}`;
-    const status = { active: 'Paying', trialing: 'Free trial', none: 'Signed up', past_due: 'Payment issue', canceled: 'Cancelled' };
-    return `<div class="head"><div><h1>${esc(sum.name)}</h1><div class="sub">Last ${C.clickDays} days</div></div>
-      <div class="linkbox"><span style="color:var(--muted)">Your referral link</span><br><b id="reflink">${esc(link)}</b> · <a href="#" data-act="copy" data-text="${esc(link)}">Copy</a></div></div>
-      <div class="eyebrow">Clicks from Union Vault to you</div>
+    return `<div class="head"><div><h1>${esc(sum.name)}</h1><div class="sub">Last ${C.clickDays} days</div></div></div>
+      <div class="eyebrow">Your listing — clicks from Union Vault to you</div>
       <div class="grid">${stat('Total clicks', total, '')}${stat('Website', by.website || 0, pct(by.website || 0))}${stat('Contact form', by.contact || 0, pct(by.contact || 0))}${stat('Calls / emails', (by.call || 0) + (by.email || 0), pct((by.call || 0) + (by.email || 0)))}</div>
       <div class="card" style="margin-top:12px"><div class="sub" style="margin-bottom:6px">Clicks per day</div>${days.length ? bars(days) : '<div class="sub">No clicks yet.</div>'}</div>
-      <div class="eyebrow">People you sent to Union Vault (your referral link)</div>
-      <div class="grid">${stat('Sign-ups', sum.signups, '')}${stat('Paying subscribers', sum.active_subscribers, 'active now')}${stat('Commission earned', money(sum.earned_cents), Math.round(sum.rate * 100) + '% · paid quarterly')}${stat('Awaiting payout', money(sum.unpaid_cents), '')}</div>
-      <div class="eyebrow">Recent clicks</div>
+      <div class="eyebrow">Your referrals</div>
+      <div class="grid">${stat('Sign-ups', sum.signups, '')}${stat('Paying subscribers', sum.active_subscribers, 'active now')}${stat('Referral commission', money(sum.earned_cents), Math.round(sum.rate * 100) + '% · paid quarterly')}</div>
+      <div style="margin-top:8px"><a href="#" data-act="tab" data-tab="referrals">See your referral link and sign-ups →</a></div>
+      <div class="eyebrow">Recent clicks on your listing</div>
       <div class="tablewrap"><table><tr><th>When</th><th>Button</th><th>Visitor</th></tr>${(recent || []).map(r => `<tr><td>${fmtWhen(r.clicked_at)}</td><td>${esc(LINKS[r.link] || r.link)}</td><td class="mono">${esc(r.visitor_id)}</td></tr>`).join('') || '<tr><td colspan="3" class="sub">No clicks yet.</td></tr>'}</table></div>
+      <div class="sub" style="margin-top:8px">Visitors are shown by an anonymous ID only. IDs are different for each vendor.</div>`;
+  }
+  // Referrals: the vendor's own link, what it has earned, and who signed up (anonymous).
+  async function vendorReferrals() {
+    const { sum, refs } = await loadVendorData();
+    const link = `${C.appUrl}/?ref=${encodeURIComponent(sum.code)}`;
+    const status = { active: 'Paying', trialing: 'Free trial', none: 'Signed up', past_due: 'Payment issue', canceled: 'Cancelled' };
+    return `<div class="head"><div><h1>Referrals</h1><div class="sub">Couples you send to Union Vault with your link</div></div>
+      <div class="linkbox"><span style="color:var(--muted)">Your referral link</span><br><b id="reflink">${esc(link)}</b> · <a href="#" data-act="copy" data-text="${esc(link)}">Copy</a></div></div>
+      <div class="grid">${stat('Sign-ups', sum.signups, '')}${stat('Paying subscribers', sum.active_subscribers, 'active now')}${stat('Referral commission', money(sum.earned_cents), Math.round(sum.rate * 100) + '% of what they pay')}${stat('Awaiting payout', money(sum.unpaid_cents), 'paid quarterly')}</div>
       <div class="eyebrow">Referred sign-ups</div>
       <div class="tablewrap"><table><tr><th>Referred user</th><th>Signed up</th><th>Status</th></tr>${(refs || []).map(r => `<tr><td class="mono">${esc(r.anon_id)}</td><td>${fmtDay(r.signed_up_at)}</td><td>${esc(status[r.subscription_status] || r.subscription_status)}</td></tr>`).join('') || '<tr><td colspan="3" class="sub">No sign-ups yet.</td></tr>'}</table></div>
-      <div class="sub" style="margin-top:8px">Visitors and referred users are shown by an anonymous ID only. IDs are different for each vendor.</div>`;
+      <div class="sub" style="margin-top:8px">Referred users are shown by an anonymous ID only — no names or emails.</div>`;
   }
 
   const FIELDS = [['name', 'Business name'], ['category_label', 'Category'], ['phone', 'Phone'], ['email', 'Email'], ['area', 'Service area'], ['hours', 'Opening hours'], ['website_url', 'Website link'], ['contact_url', 'Contact form link'], ['instagram_url', 'Instagram link']];
@@ -79,7 +91,7 @@
     const [rows, ch] = await Promise.all([api.select('vendor_profiles', { eq: { vendor_id: vid } }), api.select('vendor_profile_changes', { eq: { vendor_id: vid }, order: 'submitted_at', limit: 1 })]);
     const p = rows[0] || {}, last = ch && ch[0];
     const inp = (k, l) => `<div class="field"><label for="f-${k}">${l}</label>${k === 'area' || k === 'hours' ? `<textarea rows="2" id="f-${k}" data-k="${k}">${esc(p[k])}</textarea>` : `<input id="f-${k}" data-k="${k}" value="${esc(p[k])}" ${k.endsWith('_url') ? 'placeholder="https://… (leave blank to keep the current link)"' : ''}>`}</div>`;
-    return `<div class="cols"><div class="main"><div class="head"><h1>Edit your listing</h1></div>
+    return `<div class="cols"><div class="main"><div class="head"><div><h1>Your listing</h1><div class="sub">What couples see on Union Vault’s Recommended vendors page</div></div></div>
       <div class="note">Changes are reviewed by Union Vault before they appear (usually within a day). The Google rating and our note about you are added by Union Vault.</div>
       ${last && last.status === 'pending' ? '<div class="note">You have a change waiting for review. Submitting again replaces it.</div>' : ''}
       ${last && last.status === 'rejected' ? `<div class="note err">Your last change wasn’t approved${last.review_note ? ': ' + esc(last.review_note) : ''}.</div>` : ''}
@@ -90,7 +102,7 @@
 
   async function vendorTerms() {
     const [terms, acc] = await Promise.all([api.select('partner_terms', { order: 'effective_from', limit: 1 }), api.select('partner_terms_acceptances')]);
-    const t = terms && terms[0]; if (!t) return '<div class="head"><h1>Terms</h1></div><div class="note">No terms have been published yet.</div>';
+    const t = terms && terms[0]; if (!t) return '<div class="head"><h1>Agreement</h1></div><div class="note">No agreement has been published yet.</div>';
     const done = (acc || []).some(a => a.terms_id === t.id);
     return `<div class="head"><div><h1>${esc(t.title)}</h1><div class="sub">Version ${esc(t.version)}</div></div></div><div class="terms">${esc(t.body_md)}</div>
       ${done ? '<div class="note ok" style="margin-top:14px">You have accepted these terms.</div>' : `<div style="margin-top:14px"><button class="btn primary" data-act="accept" data-id="${esc(t.id)}">I accept these terms</button></div>`}`;
@@ -101,7 +113,7 @@
     const [ov, ch, rc] = await Promise.all([api.rpc('admin_partner_overview', { p_days: C.clickDays }), api.select('vendor_profile_changes', { eq: { status: 'pending' } }), api.rpc('admin_recent_clicks', { p_limit: 40 })]);
     const sum = k => (ov || []).reduce((a, r) => a + Number(r[k] || 0), 0);
     return `<div class="head"><div><h1>All vendors</h1><div class="sub">Last ${C.clickDays} days</div></div></div>
-      <div class="grid">${stat('Clicks to vendors', sum('clicks'), '')}${stat('Referred sign-ups', sum('signups'), '')}${stat('Paying referred', sum('paying'), '')}${stat('Commission earned', money(sum('commission_cents')), 'all time')}</div>
+      <div class="grid">${stat('Clicks to vendors', sum('clicks'), '')}${stat('Referred sign-ups', sum('signups'), '')}${stat('Paying referred', sum('paying'), '')}${stat('Referral commission', money(sum('commission_cents')), 'all time')}</div>
       <div class="eyebrow">Vendors</div>
       <div class="tablewrap"><table><tr><th>Vendor</th><th>Clicks</th><th>Contact form</th><th>Calls / emails</th><th>Sign-ups</th><th>Paying</th><th>Commission</th></tr>${(ov || []).map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${r.clicks}</td><td>${r.contact_form}</td><td>${r.calls_emails}</td><td>${r.signups}</td><td>${r.paying}</td><td>${money(r.commission_cents)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">No partners yet.</td></tr>'}</table></div>
       <div class="eyebrow">Profile changes to review (${(ch || []).length})</div>
@@ -117,8 +129,8 @@
       let tabs, body;
       if (S.role === 'admin') { tabs = [['overview', 'Overview']]; S.tab = 'overview'; body = await adminOverview(); }
       else if (S.role === 'vendor') {
-        tabs = [['dashboard', 'Dashboard'], ['profile', 'My profile'], ['terms', 'Terms']]; if (!S.tab) S.tab = 'dashboard';
-        body = S.tab === 'profile' ? await vendorProfile() : S.tab === 'terms' ? await vendorTerms() : await vendorDashboard();
+        tabs = [['overview', 'Overview'], ['listing', 'Your listing'], ['referrals', 'Referrals'], ['agreement', 'Agreement']]; if (!S.tab) S.tab = 'overview';
+        body = S.tab === 'listing' ? await vendorProfile() : S.tab === 'referrals' ? await vendorReferrals() : S.tab === 'agreement' ? await vendorTerms() : await vendorOverview();
       } else { tabs = []; body = '<div class="note">Your account isn’t linked to a vendor listing yet. Please contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</div>'; }
       app.innerHTML = shell(tabs, body);
     } catch (e) { console.error(e); app.innerHTML = shell([], `<div class="note err">Something went wrong loading this page. ${esc(e.message || e)}</div>`); }
