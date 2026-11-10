@@ -19,11 +19,23 @@ window.PORTAL_DEMO = function (kind) {
   const R = {
     is_admin: kind === 'admin',
     my_vendor_id: 'storyline',
-    partner_summary: kind === 'admin' ? null : { name: 'Storyline Ceremonies', code: 'storyline', rate: 0.25, signups: 19, active_subscribers: 7, earned_cents: 3840, unpaid_cents: 3840, paid_cents: 0 },
+    partner_summary: kind === 'admin' ? null : { name: 'Storyline Ceremonies', code: 'storyline', rate: 0.2, signups: 19, active_subscribers: 7, earned_cents: 3840, unpaid_cents: 3840, paid_cents: 0 },
     partner_referrals: [{ anon_id: 'a4f19c02', signed_up_at: '2026-11-02', subscription_status: 'active' }, { anon_id: '7be3d81a', signed_up_at: '2026-10-30', subscription_status: 'trialing' }, { anon_id: 'c09e5512', signed_up_at: '2026-10-24', subscription_status: 'active' }, { anon_id: '12dd9a47', signed_up_at: '2026-10-19', subscription_status: 'none' }],
     vendor_clicks_all: days, vendor_recent_clicks: recent,
     admin_partner_overview: [{ partner_id: '1', name: 'Storyline Ceremonies', vendor_id: 'storyline', clicks: 214, contact_form: 41, calls_emails: 55, signups: 19, paying: 7, commission_cents: 3840 }, { partner_id: '2', name: 'Jordan Leef Photography', vendor_id: 'jordanleef', clicks: 171, contact_form: 0, calls_emails: 0, signups: 11, paying: 3, commission_cents: 1665 }],
     admin_recent_clicks: recent.map((r, i) => ({ clicked_at: r.clicked_at, vendor_id: i % 2 ? 'jordanleef' : 'storyline', link: r.link, user_email: r.visitor_id === 'guest' ? null : 'couple' + i + '@example.com', is_bot: false })),
+    partner_statements: [
+      { period_start: '2026-07-01', period_end: '2026-09-30', earned_cents: 2395, paid: true, paid_at: '2026-10-14', reference: 'BANK-2231' },
+      { period_start: '2026-10-01', period_end: '2026-12-31', earned_cents: 1380, paid: false, paid_at: null, reference: null }],
+    partner_statement_lines: a => (a && a.p_period === '2026-07-01'
+      ? [{ occurred_at: '2026-07-19T02:00:00Z', anon_id: '12dd9a47', kind: 'payment', paid_cents: 1299, commission_cents: 260 }, { occurred_at: '2026-08-02T02:00:00Z', anon_id: 'c09e5512', kind: 'payment', paid_cents: 3118, commission_cents: 624 }, { occurred_at: '2026-08-19T02:00:00Z', anon_id: '12dd9a47', kind: 'payment', paid_cents: 1299, commission_cents: 260 }, { occurred_at: '2026-09-02T02:00:00Z', anon_id: 'a4f19c02', kind: 'payment', paid_cents: 5456, commission_cents: 1091 }, { occurred_at: '2026-09-19T02:00:00Z', anon_id: '12dd9a47', kind: 'payment', paid_cents: 1299, commission_cents: 260 }, { occurred_at: '2026-09-20T02:00:00Z', anon_id: 'c09e5512', kind: 'reversal', paid_cents: -500, commission_cents: -100 }]
+      : [{ occurred_at: '2026-10-19T02:00:00Z', anon_id: '12dd9a47', kind: 'payment', paid_cents: 1299, commission_cents: 260 }, { occurred_at: '2026-11-02T02:00:00Z', anon_id: 'a4f19c02', kind: 'payment', paid_cents: 7794, commission_cents: 1559 }, { occurred_at: '2026-11-05T02:00:00Z', anon_id: 'c09e5512', kind: 'reversal', paid_cents: -2000, commission_cents: -439 }]),
+    admin_payout_overview: [
+      { partner_id: '1', name: 'Storyline Ceremonies', rate: 0.2, unpaid_cents: 1380, in_draft_cents: 0, paid_cents: 2395 },
+      { partner_id: '2', name: 'Jordan Leef Photography', rate: null, unpaid_cents: 0, in_draft_cents: 0, paid_cents: 0 }],
+    admin_payouts: [
+      { id: 'p1', partner_id: '1', name: 'Storyline Ceremonies', period_start: '2026-07-01', period_end: '2026-09-30', total_cents: 2395, status: 'paid', paid_at: '2026-10-14', reference: 'BANK-2231' }],
+    affiliate_create_payout: { status: 'created' }, affiliate_mark_payout_paid: { status: 'paid' }, affiliate_void_payout: { status: 'voided' },
     review_profile_change: { ok: true }, submit_profile_change: { ok: true }, accept_terms: { ok: true }
   };
   const T = {
@@ -36,7 +48,7 @@ window.PORTAL_DEMO = function (kind) {
     demo: true,
     session: async () => ({ user: { email: kind === 'admin' ? 'admin@unionvault.app' : 'ben@storylineceremonies.com.au' } }),
     upload: async () => 'x', signIn: async () => {}, signOut: async () => { location.search = ''; },
-    rpc: async (name) => R[name],
+    rpc: async (name, args) => (typeof R[name] === 'function' ? R[name](args) : R[name]),
     select: async (table, opts) => (T[table] || []).filter(r => !opts || !opts.eq || Object.entries(opts.eq).every(([k, v]) => r[k] === v))
   };
 };

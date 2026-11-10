@@ -5,7 +5,7 @@
   const C = window.PORTAL_CONFIG, app = document.getElementById('app');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pctText = r => (r == null ? null : Math.round(Number(r) * 100) + '%');
-  const money = c => '$' + (Number(c || 0) / 100).toFixed(2);
+  const money = c => (Number(c) < 0 ? '-' : '') + '$' + (Math.abs(Number(c || 0)) / 100).toFixed(2);
   const fmtDay = iso => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
   const fmtWhen = iso => new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   const LINKS = { website: 'Website', contact: 'Contact form', instagram: 'Instagram', book: 'Book online', call: 'Call', email: 'Email' };
@@ -37,7 +37,7 @@
   // A stored photo is a storage path (real) or a blob:/data: URL (demo, or just picked this session).
   const photoUrl = p => !p ? '' : /^(blob:|data:)/.test(p) ? p.replace(/'/g, '%27').replace(/"/g, '%22') : `${C.supabaseUrl}/storage/v1/object/public/vendor-media/${p}`;
 
-  const S = { user: null, role: null, tab: null, msg: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
+  const S = { user: null, role: null, tab: null, msg: null, stmt: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
   const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'UV';
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
     <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
@@ -178,7 +178,26 @@
       <div class="grid">${stat('🧑‍🤝‍🧑', 'Sign-ups', sum.signups, '')}${stat('💳', 'Paying subscribers', sum.active_subscribers, 'active now', 'var(--c-call)')}${stat('💰', 'Referral commission', money(sum.earned_cents), sum.rate == null ? 'Rate to be agreed' : pctText(sum.rate) + ' of what they pay', 'var(--gold)')}${stat('🗓️', 'Awaiting payout', money(sum.unpaid_cents), 'paid quarterly', 'var(--c-email)')}</div>
       <div class="eyebrow">Referred sign-ups</div>
       <div class="tablewrap"><table><tr><th>Referred user</th><th>Signed up</th><th>Status</th></tr>${(refs || []).map(r => `<tr><td class="mono">${esc(r.anon_id)}</td><td>${fmtDay(r.signed_up_at)}</td><td>${esc(status[r.subscription_status] || r.subscription_status)}</td></tr>`).join('') || '<tr><td colspan="3" class="sub">No sign-ups yet.</td></tr>'}</table></div>
-      <div class="sub" style="margin-top:8px">Referred users are shown by an anonymous ID only — no names or emails.</div>`;
+      <div class="sub" style="margin-top:8px">Referred users are shown by an anonymous ID only — no names or emails.</div>
+      <div class="eyebrow">Quarterly statements</div>${await statementsHtml()}`;
+  }
+  // One row per calendar quarter; "View" opens the lines (anonymous client ID, what they paid, your commission).
+  async function statementsHtml() {
+    const rows = await api.rpc('partner_statements');
+    if (!(rows || []).length) return '<div class="card sub">No commission yet. Statements appear here once the couples you refer start paying.</div>';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return `<div class="tablewrap"><table><tr><th>Quarter</th><th>Commission</th><th>Status</th><th></th></tr>${rows.map(r => {
+      const ps = parse(String(r.period_start).slice(0, 10)), pe = parse(String(r.period_end).slice(0, 10)), key = iso(ps), open = S.stmt === key;
+      const st = r.paid ? `Paid${r.paid_at ? ' ' + fmtDay(r.paid_at) : ''}${r.reference ? ' · ' + esc(r.reference) : ''}` : pe < today ? 'Awaiting payout' : 'In progress';
+      return `<tr><td>${esc(qName(ps))}</td><td>${money(r.earned_cents)}</td><td>${st}</td><td style="text-align:right"><a href="#" data-act="stmt" data-p="${key}">${open ? 'Hide' : 'View lines'}</a></td></tr>${open ? '<tr><td colspan="4" id="stmtlines" class="sub">Loading…</td></tr>' : ''}`;
+    }).join('')}</table></div><div class="sub" style="margin-top:8px">Paid quarterly in arrears, after allowing for refunds. A refund after a payout is taken off your next one.</div>`;
+  }
+  async function loadStatementLines() {
+    const el = document.getElementById('stmtlines'); if (!el || !S.stmt) return;
+    const lines = await api.rpc('partner_statement_lines', { p_period: S.stmt });
+    const kind = { payment: 'Payment', reversal: 'Refund / reversal' };
+    el.className = ''; el.style.padding = '0';
+    el.innerHTML = `<table style="background:var(--surface)"><tr><th>Date</th><th>Referred client</th><th>Type</th><th style="text-align:right">They paid</th><th style="text-align:right">Your commission</th></tr>${(lines || []).map(l => `<tr><td>${fmtDay(l.occurred_at)}</td><td class="mono">${esc(l.anon_id)}</td><td>${kind[l.kind] || esc(l.kind)}</td><td style="text-align:right">${money(l.paid_cents)}</td><td style="text-align:right">${money(l.commission_cents)}</td></tr>`).join('') || '<tr><td colspan="5" class="sub">No lines.</td></tr>'}</table>`;
   }
 
   // ── listing editor ──
@@ -319,17 +338,35 @@
       <div class="tablewrap"><table><tr><th>When</th><th>Vendor</th><th>Button</th><th>Signed-in user</th></tr>${(rc || []).filter(r => !r.is_bot).map(r => `<tr><td>${fmtWhen(r.clicked_at)}</td><td>${esc(r.vendor_id)}</td><td>${esc(LINKS[r.link] || r.link)}</td><td>${esc(r.user_email || 'guest')}</td></tr>`).join('')}</table></div>`;
   }
 
+  async function adminPayouts() {
+    const [ov, po] = await Promise.all([api.rpc('admin_payout_overview'), api.rpc('admin_payouts')]);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const lq = new Date(qStart(today).getFullYear(), qStart(today).getMonth() - 3, 1), lqKey = iso(lq);
+    const sum = k => (ov || []).reduce((a, r) => a + Number(r[k] || 0), 0);
+    return `<div class="head"><div><h1>Payouts</h1><div class="sub">Quarterly, in arrears. Last finished quarter: ${esc(qName(lq))}</div></div></div>
+      <div class="grid">${stat('🕒', 'Owed, not yet in a payout', money(sum('unpaid_cents')), '')}${stat('📝', 'In draft payouts', money(sum('in_draft_cents')), '', 'var(--c-email)')}${stat('✅', 'Paid so far', money(sum('paid_cents')), '', 'var(--c-call)')}</div>
+      <div class="eyebrow">Partners</div>
+      <div class="tablewrap"><table><tr><th>Partner</th><th>Rate</th><th>Owed</th><th>In draft</th><th>Paid</th><th></th></tr>${(ov || []).map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${r.rate == null ? '<span class="sub">to be agreed</span>' : pctText(r.rate)}</td><td>${money(r.unpaid_cents)}</td><td>${money(r.in_draft_cents)}</td><td>${money(r.paid_cents)}</td>
+        <td style="text-align:right"><button class="btn sm" data-act="payout-create" data-partner="${esc(r.partner_id)}" data-q="${lqKey}" ${Number(r.unpaid_cents) > 0 ? '' : 'disabled'}>Create ${esc(qName(lq))} payout</button></td></tr>`).join('') || '<tr><td colspan="6" class="sub">No partners yet.</td></tr>'}</table></div>
+      <div class="eyebrow">Payouts</div>
+      <div class="tablewrap"><table><tr><th>Quarter</th><th>Partner</th><th>Amount</th><th>Status</th><th></th></tr>${(po || []).map(p => `<tr><td>${esc(qName(parse(String(p.period_start).slice(0, 10))))}</td><td>${esc(p.name)}</td><td>${money(p.total_cents)}</td>
+        <td>${p.status === 'paid' ? `Paid ${fmtDay(p.paid_at)}${p.reference ? ' · ' + esc(p.reference) : ''}` : 'Draft'}</td>
+        <td style="text-align:right">${p.status === 'draft' ? `<input id="ref-${esc(p.id)}" placeholder="Bank reference" style="width:150px;padding:5px 8px;margin-right:6px"><button class="btn primary sm" data-act="payout-paid" data-id="${esc(p.id)}">Mark paid</button> <button class="btn sm" data-act="payout-void" data-id="${esc(p.id)}">Cancel</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="sub">No payouts yet.</td></tr>'}</table></div>
+      <div class="sub" style="margin-top:8px">A draft locks in everything owed up to the end of that quarter. Pay the partner by bank transfer, then enter the reference and mark it paid. A payout that would be zero or negative is not created: it carries forward.</div>`;
+  }
+
   // ── routing ──
   async function render() {
     try {
       let tabs, body;
-      if (S.role === 'admin') { tabs = [['overview', 'Overview']]; S.tab = 'overview'; body = await adminOverview(); }
+      if (S.role === 'admin') { tabs = [['overview', 'Overview'], ['payouts', 'Payouts']]; if (S.tab !== 'payouts') S.tab = 'overview'; body = S.tab === 'payouts' ? await adminPayouts() : await adminOverview(); }
       else if (S.role === 'vendor') {
         tabs = [['overview', 'Overview'], ['listing', 'Your listing'], ['referrals', 'Referrals'], ['agreement', 'Agreement']]; if (!S.tab) S.tab = 'overview';
         body = S.tab === 'listing' ? await vendorProfile() : S.tab === 'referrals' ? await vendorReferrals() : S.tab === 'agreement' ? await vendorTerms() : await vendorOverview();
       } else { tabs = []; body = '<div class="note">Your account isn’t linked to a vendor listing yet. Please contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</div>'; }
       app.innerHTML = shell(tabs, body);
       if (S.tab === 'listing' && S.role === 'vendor') refreshPreview();
+      if (S.tab === 'referrals' && S.role === 'vendor') loadStatementLines();
     } catch (e) { console.error(e); app.innerHTML = shell([], `<div class="note err">Something went wrong loading this page. ${esc(e.message || e)}</div>`); }
     S.msg = null;
   }
@@ -356,6 +393,18 @@
     if (act === 'range') { S.range = el.dataset.range; render(); }
     if (act === 'copy') { e.preventDefault(); try { await navigator.clipboard.writeText(el.dataset.text); el.textContent = 'Copied'; } catch (_) {} }
     if (act === 'accept') { try { await api.rpc('accept_terms', { p_terms: el.dataset.id }); S.msg = { kind: 'ok', text: 'Thank you — terms accepted.' }; } catch (err) { S.msg = { kind: 'err', text: 'Could not record acceptance: ' + (err.message || err) }; } render(); }
+    if (act === 'stmt') { e.preventDefault(); S.stmt = S.stmt === el.dataset.p ? null : el.dataset.p; render(); }
+    if (act === 'payout-create' || act === 'payout-paid' || act === 'payout-void') {
+      const say = { created: 'Draft payout created.', nothing_due: 'Nothing is due for that partner (any negative balance carries forward).', exists: 'A payout for that quarter already exists.',
+        quarter_not_finished: 'That quarter has not finished yet.', paid: 'Marked as paid.', already_paid: 'Already marked as paid.', voided: 'Draft cancelled.', not_a_draft: 'Only drafts can be cancelled.', admin_only: 'Admin only.' };
+      try {
+        const r = act === 'payout-create' ? await api.rpc('affiliate_create_payout', { p_partner: el.dataset.partner, p_quarter_start: el.dataset.q })
+          : act === 'payout-paid' ? await api.rpc('affiliate_mark_payout_paid', { p_payout: el.dataset.id, p_reference: (document.getElementById('ref-' + el.dataset.id) || {}).value || '' })
+          : await api.rpc('affiliate_void_payout', { p_payout: el.dataset.id });
+        S.msg = { kind: ['created', 'paid', 'voided'].includes(r && r.status) ? 'ok' : '', text: say[r && r.status] || ('Result: ' + (r && r.status)) };
+      } catch (err) { S.msg = { kind: 'err', text: err.message || String(err) }; }
+      render();
+    }
     if (act === 'review') { try { await api.rpc('review_profile_change', { p_id: el.dataset.id, p_approve: el.dataset.ok === '1' }); S.msg = { kind: 'ok', text: el.dataset.ok === '1' ? 'Approved.' : 'Rejected.' }; } catch (err) { S.msg = { kind: 'err', text: err.message || String(err) }; } render(); }
     if (!d) return;
     if (act === 'pick') document.getElementById('file').click();
