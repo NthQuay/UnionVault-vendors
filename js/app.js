@@ -45,7 +45,7 @@
   // A stored photo is a storage path (real) or a blob:/data: URL (demo, or just picked this session).
   const photoUrl = p => !p ? '' : /^(blob:|data:)/.test(p) ? p.replace(/'/g, '%27').replace(/"/g, '%22') : `${C.supabaseUrl}/storage/v1/object/public/vendor-media/${p}`;
 
-  const S = { user: null, role: null, tab: null, msg: null, stmt: null, reqOpen: false, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
+  const S = { user: null, role: null, tab: null, msg: null, stmt: null, reqOpen: false, reqForm: null, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
   const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'UV';
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
     <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
@@ -55,9 +55,11 @@
   const stat = (icon, l, n, s, col) => `<div class="stat"${col ? ` style="--c:${col}"` : ''}><div class="ic">${icon}</div><div class="l">${l}</div><div class="n">${n}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
 
   // ── login ──
+  // The Union Vault logo (black on light, white on dark). Files live on the main site.
+  const logoHtml = w => `<img class="lg lg-l" src="https://unionvault.app/assets/email-logo-black.png" width="${w}" alt="Union Vault"><img class="lg lg-d" src="https://unionvault.app/assets/email-logo-white.png" width="${w}" alt="">`;
   function loginView(sent) {
-    app.innerHTML = `<div class="login"><div class="brand" style="font-size:26px">UnionVault<span class="pill">Vendors</span></div>
-      <h1 style="margin-top:28px">Sign in</h1><p>Enter the email address we have for you. We’ll send a one-tap sign-in link.</p>
+    app.innerHTML = `<div class="login"><div class="loginlogo">${logoHtml(92)}<span class="pill" style="margin:6px 0 0">Vendors</span></div>
+      <h1 style="margin-top:22px">Sign in</h1><p>Enter the email address we have for you. We’ll send a one-tap sign-in link.</p>
       ${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}
       ${sent ? '<div class="note ok">Check your inbox for the sign-in link.</div>' : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" required></div><button class="btn primary" style="width:100%;margin-top:8px">Email me a sign-in link</button></form>`}
       <p style="font-size:13px;margin-top:24px">Not a Union Vault vendor yet? <a href="#" data-act="req-open">Request vendor access</a></p>
@@ -65,17 +67,20 @@
   }
   // Pop-up form for a business that wants to be listed. Reviewed by the admin (Requests tab) before any login exists.
   function requestModal() {
-    const d = S.reqDone;
+    const d = S.reqDone, v = S.reqForm || {};
     return `<div class="mov" data-act="req-bg"><div class="mcard" role="dialog" aria-modal="true" aria-label="Request vendor access">
       <button class="mclose" data-act="req-close" aria-label="Close">×</button>
       ${d ? `<div style="text-align:center;padding:18px 0 6px"><div style="font-size:34px">✅</div><h2 style="font-size:26px;margin:6px 0">Request received</h2><p class="sub" style="font-size:13.5px">Thanks, ${esc(d)}. We’ll review it and email you at the address you gave. If approved, you’ll get a sign-in link for your vendor account.</p><button class="btn primary" data-act="req-close" style="margin-top:10px">Close</button></div>`
       : `<h2 style="font-size:28px;margin-bottom:2px">Request vendor access</h2><p class="sub" style="margin-bottom:12px">Tell us a little about your business. We review every request and email you with the outcome.</p>
       ${S.reqErr ? `<div class="note err">${esc(S.reqErr)}</div>` : ''}
-      <form id="reqform" autocomplete="on">
-        <div class="row"><div class="field"><label for="rq-name">Your name</label><input id="rq-name" name="name" maxlength="80" required autocomplete="name"></div><div class="field"><label for="rq-biz">Business name</label><input id="rq-biz" name="business" maxlength="100" required autocomplete="organization"></div></div>
-        <div class="row"><div class="field"><label for="rq-email">Email</label><input id="rq-email" name="email" type="email" maxlength="120" required autocomplete="email"></div><div class="field"><label for="rq-phone">Phone</label><input id="rq-phone" name="phone" type="tel" maxlength="40" required autocomplete="tel"></div></div>
-        <div class="field"><label for="rq-web">Website or Instagram</label><input id="rq-web" name="website" maxlength="200" placeholder="https://…" autocomplete="url"></div>
-        <div class="field"><label for="rq-about">What is your business?</label><textarea id="rq-about" name="about" rows="4" maxlength="1000" required placeholder="e.g. Marriage celebrant and MC in Brisbane, ceremonies anywhere in South East Queensland…"></textarea></div>
+      <form id="reqform" autocomplete="on" novalidate>
+        <div class="row"><div class="field"><label for="rq-name">Your name</label><input id="rq-name" name="name" maxlength="80" required autocomplete="name" value="${esc(v.name)}"></div><div class="field"><label for="rq-biz">Business name</label><input id="rq-biz" name="business" maxlength="100" required autocomplete="organization" value="${esc(v.business)}"></div></div>
+        <div class="row"><div class="field"><label for="rq-email">Email</label><input id="rq-email" name="email" type="email" maxlength="120" required autocomplete="email" value="${esc(v.email)}"></div><div class="field"><label for="rq-phone">Phone</label><input id="rq-phone" name="phone" type="tel" maxlength="40" required autocomplete="tel" value="${esc(v.phone)}"></div></div>
+        <div class="field"><label for="rq-web">Website or Instagram</label><input id="rq-web" name="website" maxlength="200" placeholder="https://…" autocomplete="url" value="${esc(v.website)}"></div>
+        <div class="field"><label for="rq-about">What is your business?</label><textarea id="rq-about" name="about" rows="4" maxlength="1000" required placeholder="e.g. Marriage celebrant and MC in Brisbane, ceremonies anywhere in South East Queensland…">${esc(v.about)}</textarea></div>
+        <div class="field"><div class="lbl" style="margin-top:6px">What would you like? <span style="text-transform:none;letter-spacing:0">(choose at least one)</span></div>
+          <label class="chk"><input type="checkbox" name="want_listing" ${v.want_listing ? 'checked' : ''}><span><b>Appear as a vendor on Union Vault</b><small>Couples planning on the app can find and contact you.</small></span></label>
+          <label class="chk"><input type="checkbox" name="want_affiliate" ${v.want_affiliate ? 'checked' : ''}><span><b>Get an affiliate link</b><small>Earn commission when couples you refer subscribe to Union Vault.</small></span></label></div>
         <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Leave this empty<input name="company_site" tabindex="-1" autocomplete="off"></label></div>
         <div class="sub" style="margin:2px 0 12px">We use these details only to review your request. See our <a href="https://unionvault.app/" target="_blank" rel="noopener">Terms &amp; Privacy</a>.</div>
         <button class="btn primary" style="width:100%" ${S.reqBusy ? 'disabled' : ''}>${S.reqBusy ? 'Sending…' : 'Send request'}</button>
@@ -390,9 +395,10 @@
     const pend = rows.filter(r => r.status === 'pending'), done = rows.filter(r => r.status !== 'pending');
     const card = r => `<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h3 style="font-size:22px">${esc(r.business)}</h3><div class="sub">${esc(r.name)} · submitted ${fmtWhen(r.created_at)}</div></div></div>
       <div style="margin:10px 0;font-size:13.5px">${esc(r.about)}</div>
+      <div style="margin:0 0 8px">${r.want_listing ? '<span class="chip">Appear as a vendor</span>' : ''}${r.want_affiliate ? '<span class="chip">Affiliate link</span>' : ''}</div>
       <div class="sub" style="display:flex;gap:16px;flex-wrap:wrap"><span>✉️ <a href="mailto:${esc(r.email)}">${esc(r.email)}</a></span><span>📞 ${esc(r.phone)}</span>${r.website ? `<span>🌐 <a href="${/^https?:/.test(r.website) ? esc(r.website) : '#'}" target="_blank" rel="noopener">${esc(r.website)}</a></span>` : ''}</div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><input id="rn-${esc(r.id)}" placeholder="Note (optional — included in the email)" style="flex:1;min-width:200px"><button class="btn primary" data-act="req-approve" data-id="${esc(r.id)}">Approve &amp; invite</button><button class="btn" data-act="req-deny" data-id="${esc(r.id)}">Deny</button></div></div>`;
-    return `<div class="head"><div><h1>Vendor requests</h1><div class="sub">Approving creates their login and an unpublished listing, and emails them a sign-in link.</div></div></div>
+    return `<div class="head"><div><h1>Vendor requests</h1><div class="sub">Approving creates their login (plus an unpublished listing and/or a referral link, as requested) and emails them a sign-in link.</div></div></div>
       ${pend.map(card).join('') || '<div class="card sub">No requests waiting.</div>'}
       ${done.length ? `<div class="eyebrow">Decided</div><div class="tablewrap"><table><tr><th>Business</th><th>Contact</th><th>Decision</th><th>When</th></tr>${done.map(r => `<tr><td><b>${esc(r.business)}</b></td><td>${esc(r.name)} · ${esc(r.email)}</td><td>${r.status === 'approved' ? 'Approved' : 'Denied'}${r.review_note ? ' · <span class="sub">' + esc(r.review_note) + '</span>' : ''}</td><td>${fmtDay(r.reviewed_at)}</td></tr>`).join('')}</table></div>` : ''}`;
   }
@@ -446,10 +452,15 @@
       try { await api.signIn(email); loginView(true); } catch (err) { S.msg = { kind: 'err', text: 'Could not send the link. Check the address, or ask us to invite you.' }; loginView(false); }
     }
     if (e.target.id === 'reqform') {
-      const f = Object.fromEntries(new FormData(e.target).entries());
-      if (f.company_site) { S.reqDone = f.name || 'there'; loginView(false); return; }           // honeypot: pretend success, send nothing
+      const raw = Object.fromEntries(new FormData(e.target).entries());
+      const f = { name: (raw.name || '').trim(), business: (raw.business || '').trim(), email: (raw.email || '').trim(), phone: (raw.phone || '').trim(), website: (raw.website || '').trim(), about: (raw.about || '').trim(), want_listing: !!raw.want_listing, want_affiliate: !!raw.want_affiliate };
+      S.reqForm = f;
+      if (raw.company_site) { S.reqDone = f.name || 'there'; loginView(false); return; }          // honeypot: pretend success, send nothing
+      if (!f.name || !f.business || !f.email || !f.phone || !f.about) { S.reqErr = 'Please fill in your name, business name, email, phone and what your business is.'; loginView(false); return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email)) { S.reqErr = 'That email address doesn’t look right.'; loginView(false); return; }
+      if (!f.want_listing && !f.want_affiliate) { S.reqErr = 'Please choose at least one: appear as a vendor, or get an affiliate link.'; loginView(false); return; }
       S.reqBusy = true; S.reqErr = null; loginView(false);
-      try { await api.requestAccess({ name: f.name, business: f.business, email: f.email, phone: f.phone, website: f.website, about: f.about }); S.reqDone = (f.name || 'there').split(' ')[0]; }
+      try { await api.requestAccess(f); S.reqDone = f.name.split(' ')[0] || 'there'; S.reqForm = null; }
       catch (err) { S.reqErr = 'Sorry, that didn’t send. Please try again, or email support@unionvault.app.'; }
       S.reqBusy = false; loginView(false);
     }
@@ -469,7 +480,7 @@
     if (act === 'range') { S.range = el.dataset.range; render(); }
     if (act === 'copy') { e.preventDefault(); try { await navigator.clipboard.writeText(el.dataset.text); el.textContent = 'Copied'; } catch (_) {} }
     if (act === 'accept') { try { await api.rpc('accept_terms', { p_terms: el.dataset.id }); S.msg = { kind: 'ok', text: 'Thank you — terms accepted.' }; } catch (err) { S.msg = { kind: 'err', text: 'Could not record acceptance: ' + (err.message || err) }; } render(); }
-    if (act === 'req-open') { e.preventDefault(); S.reqOpen = true; S.reqDone = null; S.reqErr = null; loginView(false); }
+    if (act === 'req-open') { e.preventDefault(); S.reqOpen = true; S.reqDone = null; S.reqErr = null; S.reqForm = null; loginView(false); }
     if (act === 'req-close' || (act === 'req-bg' && e.target === el)) { S.reqOpen = false; S.reqDone = null; loginView(false); }
     if (act === 'ledger-partner') { S.ledgerPartner = el.dataset.id; render(); }
     if (act === 'ledger-period') { S.ledgerPeriod = el.dataset.p; render(); }

@@ -119,3 +119,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--gold);outline-of
 .mclose{position:absolute;right:14px;top:10px;border:0;background:none;color:var(--muted);font-size:26px;line-height:1;cursor:pointer;width:34px;height:34px;border-radius:8px}
 .mclose:hover{background:var(--surface);color:var(--ink)}
 .login .field{text-align:left}
+
+/* sign-in page logo + request checkboxes */
+.loginlogo{display:flex;flex-direction:column;align-items:center}
+.lg{display:block;height:auto}.lg-d{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .lg-l{display:none}:root:not([data-theme=light]) .lg-d{display:block}}
+:root[data-theme=dark] .lg-l{display:none}:root[data-theme=dark] .lg-d{display:block}
+.chip{display:inline-block;border:1px solid var(--border);border-radius:99px;padding:3px 10px;font-size:11.5px;margin:2px 6px 2px 0;background:var(--surface)}
+label.chk{display:flex;gap:11px;align-items:flex-start;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:0 0 8px;cursor:pointer}
+label.chk input{width:auto;margin-top:3px;accent-color:var(--gold-deep);flex:none}
+label.chk span{display:flex;flex-direction:column}label.chk small{color:var(--muted);font-size:12px;margin-top:1px}
