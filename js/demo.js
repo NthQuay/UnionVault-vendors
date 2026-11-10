@@ -49,6 +49,21 @@ window.PORTAL_DEMO = function (kind) {
     admin_payouts: [
       { id: 'p1', partner_id: '1', name: 'Storyline Ceremonies', period_start: '2026-07-01', period_end: '2026-09-30', total_cents: 2395, status: 'paid', paid_at: '2026-10-14', reference: 'BANK-2231' }],
     affiliate_create_payout: { status: 'created' }, affiliate_mark_payout_paid: { status: 'paid' }, affiliate_void_payout: { status: 'voided' },
+    admin_vendor_requests: [
+      { id: 'q1', status: 'pending', created_at: new Date(Date.now() - 3 * 3600000).toISOString(), name: 'Sam Carter', business: 'Bloom & Wild Florals', email: 'sam@bloomandwild.example', phone: '0412 345 678', website: 'https://instagram.com/bloomandwild', about: 'Wedding florist in Brisbane and the Gold Coast. Bouquets, ceremony arches and table styling. We have worked with around 80 couples since 2021.', reviewed_at: null, review_note: null },
+      { id: 'q2', status: 'pending', created_at: new Date(Date.now() - 26 * 3600000).toISOString(), name: 'Priya Nair', business: 'Nair Films', email: 'priya@nairfilms.example', phone: '0498 111 222', website: 'https://nairfilms.example', about: 'Wedding videography, highlight films and full-day coverage across South East Queensland.', reviewed_at: null, review_note: null },
+      { id: 'q3', status: 'approved', created_at: new Date(Date.now() - 6 * 86400000).toISOString(), name: 'Jordan Leef', business: 'Jordan Leef Photography', email: 'jordanleef2@gmail.com', phone: '0400 000 000', website: 'https://instagram.com/jordan_leef_photography', about: 'Wedding photographer.', reviewed_at: new Date(Date.now() - 5 * 86400000).toISOString(), review_note: 'Welcome aboard' }],
+    admin_partner_clients: [
+      { email: 'liam.test@example.com', anon_id: 'a4f19c02', signed_up_at: '2026-11-02', plan_months: 12, plan_amount_cents: 7794, subscription_status: 'active', cancel_state: null },
+      { email: 'mandy.s@example.com', anon_id: 'c09e5512', signed_up_at: '2026-10-24', plan_months: 3, plan_amount_cents: 3118, subscription_status: 'active', cancel_state: 'requested' },
+      { email: null, anon_id: '12dd9a47', signed_up_at: '2026-07-19', plan_months: 1, plan_amount_cents: 1299, subscription_status: 'canceled', cancel_state: 'ended' },
+      { email: 'new.couple@example.com', anon_id: '7be3d81a', signed_up_at: '2026-10-30', plan_months: null, plan_amount_cents: null, subscription_status: 'trialing', cancel_state: null }],
+    admin_partner_ledger: () => [
+      { occurred_at: '2026-10-05T02:00:00Z', email: null, anon_id: '12dd9a47', kind: 'cancelled', plan_months: null, paid_cents: 0, commission_cents: 0, status: '' },
+      { occurred_at: '2026-10-19T02:00:00Z', email: 'new.couple@example.com', anon_id: '7be3d81a', kind: 'first', plan_months: 1, paid_cents: 1299, commission_cents: 260, status: 'pending' },
+      { occurred_at: '2026-11-02T02:00:00Z', email: 'liam.test@example.com', anon_id: 'a4f19c02', kind: 'first', plan_months: 12, paid_cents: 7794, commission_cents: 1559, status: 'pending' },
+      { occurred_at: '2026-11-03T02:00:00Z', email: 'mandy.s@example.com', anon_id: 'c09e5512', kind: 'cancel_requested', plan_months: null, paid_cents: 0, commission_cents: 0, status: '' },
+      { occurred_at: '2026-11-05T02:00:00Z', email: 'new.couple@example.com', anon_id: '7be3d81a', kind: 'reversal', plan_months: null, paid_cents: -2000, commission_cents: -439, status: 'pending' }],
     review_profile_change: { ok: true }, submit_profile_change: { ok: true }, accept_terms: { ok: true }
   };
   const T = {
@@ -60,7 +75,7 @@ window.PORTAL_DEMO = function (kind) {
   return {
     demo: true,
     session: async () => ({ user: { email: kind === 'admin' ? 'admin@unionvault.app' : 'ben@storylineceremonies.com.au' } }),
-    upload: async () => 'x', signIn: async () => {}, signOut: async () => { location.search = ''; },
+    upload: async () => 'x', requestAccess: async () => ({ ok: true }), reviewRequest: async () => ({ ok: true }), signIn: async () => {}, signOut: async () => { location.search = ''; },
     rpc: async (name, args) => (typeof R[name] === 'function' ? R[name](args) : R[name]),
     select: async (table, opts) => (T[table] || []).filter(r => !opts || !opts.eq || Object.entries(opts.eq).every(([k, v]) => r[k] === v))
   };

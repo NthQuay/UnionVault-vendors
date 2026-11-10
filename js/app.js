@@ -37,13 +37,15 @@
         if (o && o.limit) q = q.limit(o.limit);
         const { data, error } = await q; if (error) throw error; return data;
       },
+      requestAccess: async f => { const r = await fetch(C.supabaseUrl + '/functions/v1/vendor-request', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: C.supabaseKey }, body: JSON.stringify(f) }); if (!r.ok) throw new Error('request failed'); return r.json(); },
+      reviewRequest: async (id, approve, note) => { const { data: { session } } = await sb.auth.getSession(); const r = await fetch(C.supabaseUrl + '/functions/v1/vendor-request-review', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: C.supabaseKey, Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ id, approve, note }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'review failed'); return j; },
       upload: async (path, blob) => { const { error } = await sb.storage.from('vendor-media').upload(path, blob, { contentType: 'image/jpeg', upsert: false }); if (error) throw error; return path; }
     };
   }
   // A stored photo is a storage path (real) or a blob:/data: URL (demo, or just picked this session).
   const photoUrl = p => !p ? '' : /^(blob:|data:)/.test(p) ? p.replace(/'/g, '%27').replace(/"/g, '%22') : `${C.supabaseUrl}/storage/v1/object/public/vendor-media/${p}`;
 
-  const S = { user: null, role: null, tab: null, msg: null, stmt: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
+  const S = { user: null, role: null, tab: null, msg: null, stmt: null, reqOpen: false, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
   const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'UV';
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
     <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
@@ -58,7 +60,27 @@
       <h1 style="margin-top:28px">Sign in</h1><p>Enter the email address we have for you. We’ll send a one-tap sign-in link.</p>
       ${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}
       ${sent ? '<div class="note ok">Check your inbox for the sign-in link.</div>' : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" required></div><button class="btn primary" style="width:100%;margin-top:8px">Email me a sign-in link</button></form>`}
-      <p style="font-size:12px;margin-top:22px">Access is by invitation. If you haven’t been invited, contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</p></div>`;
+      <p style="font-size:13px;margin-top:24px">Not a Union Vault vendor yet? <a href="#" data-act="req-open">Request vendor access</a></p>
+      <p style="font-size:12px;margin-top:6px">Questions? <a href="mailto:support@unionvault.app">support@unionvault.app</a></p></div>${S.reqOpen ? requestModal() : ''}`;
+  }
+  // Pop-up form for a business that wants to be listed. Reviewed by the admin (Requests tab) before any login exists.
+  function requestModal() {
+    const d = S.reqDone;
+    return `<div class="mov" data-act="req-bg"><div class="mcard" role="dialog" aria-modal="true" aria-label="Request vendor access">
+      <button class="mclose" data-act="req-close" aria-label="Close">×</button>
+      ${d ? `<div style="text-align:center;padding:18px 0 6px"><div style="font-size:34px">✅</div><h2 style="font-size:26px;margin:6px 0">Request received</h2><p class="sub" style="font-size:13.5px">Thanks, ${esc(d)}. We’ll review it and email you at the address you gave. If approved, you’ll get a sign-in link for your vendor account.</p><button class="btn primary" data-act="req-close" style="margin-top:10px">Close</button></div>`
+      : `<h2 style="font-size:28px;margin-bottom:2px">Request vendor access</h2><p class="sub" style="margin-bottom:12px">Tell us a little about your business. We review every request and email you with the outcome.</p>
+      ${S.reqErr ? `<div class="note err">${esc(S.reqErr)}</div>` : ''}
+      <form id="reqform" autocomplete="on">
+        <div class="row"><div class="field"><label for="rq-name">Your name</label><input id="rq-name" name="name" maxlength="80" required autocomplete="name"></div><div class="field"><label for="rq-biz">Business name</label><input id="rq-biz" name="business" maxlength="100" required autocomplete="organization"></div></div>
+        <div class="row"><div class="field"><label for="rq-email">Email</label><input id="rq-email" name="email" type="email" maxlength="120" required autocomplete="email"></div><div class="field"><label for="rq-phone">Phone</label><input id="rq-phone" name="phone" type="tel" maxlength="40" required autocomplete="tel"></div></div>
+        <div class="field"><label for="rq-web">Website or Instagram</label><input id="rq-web" name="website" maxlength="200" placeholder="https://…" autocomplete="url"></div>
+        <div class="field"><label for="rq-about">What is your business?</label><textarea id="rq-about" name="about" rows="4" maxlength="1000" required placeholder="e.g. Marriage celebrant and MC in Brisbane, ceremonies anywhere in South East Queensland…"></textarea></div>
+        <div style="position:absolute;left:-9999px" aria-hidden="true"><label>Leave this empty<input name="company_site" tabindex="-1" autocomplete="off"></label></div>
+        <div class="sub" style="margin:2px 0 12px">We use these details only to review your request. See our <a href="https://unionvault.app/" target="_blank" rel="noopener">Terms &amp; Privacy</a>.</div>
+        <button class="btn primary" style="width:100%" ${S.reqBusy ? 'disabled' : ''}>${S.reqBusy ? 'Sending…' : 'Send request'}</button>
+      </form>`}
+    </div></div>`;
   }
 
   // ── dates & ranges ──
@@ -362,11 +384,50 @@
       <div class="sub" style="margin-top:8px">A draft locks in everything owed up to the end of that quarter. Pay the partner by bank transfer, then enter the reference and mark it paid. A payout that would be zero or negative is not created: it carries forward.</div>`;
   }
 
+  // Admin: requests from businesses that want to be listed
+  async function adminRequests() {
+    const rows = await api.rpc('admin_vendor_requests') || [];
+    const pend = rows.filter(r => r.status === 'pending'), done = rows.filter(r => r.status !== 'pending');
+    const card = r => `<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h3 style="font-size:22px">${esc(r.business)}</h3><div class="sub">${esc(r.name)} · submitted ${fmtWhen(r.created_at)}</div></div></div>
+      <div style="margin:10px 0;font-size:13.5px">${esc(r.about)}</div>
+      <div class="sub" style="display:flex;gap:16px;flex-wrap:wrap"><span>✉️ <a href="mailto:${esc(r.email)}">${esc(r.email)}</a></span><span>📞 ${esc(r.phone)}</span>${r.website ? `<span>🌐 <a href="${/^https?:/.test(r.website) ? esc(r.website) : '#'}" target="_blank" rel="noopener">${esc(r.website)}</a></span>` : ''}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><input id="rn-${esc(r.id)}" placeholder="Note (optional — included in the email)" style="flex:1;min-width:200px"><button class="btn primary" data-act="req-approve" data-id="${esc(r.id)}">Approve &amp; invite</button><button class="btn" data-act="req-deny" data-id="${esc(r.id)}">Deny</button></div></div>`;
+    return `<div class="head"><div><h1>Vendor requests</h1><div class="sub">Approving creates their login and an unpublished listing, and emails them a sign-in link.</div></div></div>
+      ${pend.map(card).join('') || '<div class="card sub">No requests waiting.</div>'}
+      ${done.length ? `<div class="eyebrow">Decided</div><div class="tablewrap"><table><tr><th>Business</th><th>Contact</th><th>Decision</th><th>When</th></tr>${done.map(r => `<tr><td><b>${esc(r.business)}</b></td><td>${esc(r.name)} · ${esc(r.email)}</td><td>${r.status === 'approved' ? 'Approved' : 'Denied'}${r.review_note ? ' · <span class="sub">' + esc(r.review_note) + '</span>' : ''}</td><td>${fmtDay(r.reviewed_at)}</td></tr>`).join('')}</table></div>` : ''}`;
+  }
+
+  // Admin: one partner's referred clients (real emails) and every ledger line
+  async function adminLedger() {
+    const ov = await api.rpc('admin_payout_overview') || [];
+    if (!S.ledgerPartner && ov.length) S.ledgerPartner = ov[0].partner_id;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const q0 = qStart(today), q1 = new Date(q0.getFullYear(), q0.getMonth() - 3, 1);
+    const periods = [['all', 'All time'], [iso(q0), qName(q0)], [iso(q1), qName(q1)]];
+    if (!S.ledgerPeriod) S.ledgerPeriod = 'all';
+    const [clients, lines] = S.ledgerPartner ? await Promise.all([api.rpc('admin_partner_clients', { p_partner: S.ledgerPartner }), api.rpc('admin_partner_ledger', { p_partner: S.ledgerPartner, p_period: S.ledgerPeriod === 'all' ? null : S.ledgerPeriod })]) : [[], []];
+    const status = { active: 'Paying', trialing: 'Free trial', none: 'Signed up', past_due: 'Payment issue', canceled: 'Cancelled' };
+    const kind = { first: 'First payment', renewal: 'Renewal', reversal: 'Refund / reversal', cancel_requested: 'Cancellation requested', cancelled: 'Subscription cancelled', resumed: 'Subscription resumed' };
+    const st = { pending: 'Pending', approved: 'In payout', paid: 'Paid', '': '' };
+    const money2 = (l, v) => (['first', 'renewal', 'reversal'].includes(l.kind) ? money(v) : '<span class="sub">—</span>');
+    const sumC = (lines || []).reduce((a, l) => a + Number(l.commission_cents || 0), 0);
+    return `<div class="head"><div><h1>Referral ledger</h1><div class="sub">Who each partner referred, their plan, and every payment and cancellation. Partners only ever see the anonymous ID.</div></div></div>
+      <div class="seg" style="margin-top:0">${ov.map(p => `<button class="${S.ledgerPartner === p.partner_id ? 'on' : ''}" data-act="ledger-partner" data-id="${esc(p.partner_id)}">${esc(p.name)}</button>`).join('')}</div>
+      <div class="eyebrow">Referred clients</div>
+      <div class="tablewrap"><table><tr><th>Client</th><th>Anonymous ID</th><th>Signed up</th><th>Plan</th><th>Status</th></tr>${(clients || []).map(c => `<tr><td>${c.email ? esc(c.email) : '<span class="sub">account deleted</span>'}</td><td class="mono">${esc(c.anon_id)}</td><td>${fmtDay(c.signed_up_at)}</td><td>${planText(c.plan_months, c.plan_amount_cents)}</td><td>${esc(c.cancel_state === 'ended' ? 'Cancelled' : c.cancel_state === 'requested' ? 'Cancelling' : (status[c.subscription_status] || c.subscription_status))}</td></tr>`).join('') || '<tr><td colspan="5" class="sub">No referred clients yet.</td></tr>'}</table></div>
+      <div class="eyebrow">Ledger</div>
+      <div class="seg2" style="margin-bottom:10px">${periods.map(([k, l]) => `<button class="${S.ledgerPeriod === k ? 'on' : ''}" data-act="ledger-period" data-p="${k}">${esc(l)}</button>`).join('')}</div>
+      <div class="tablewrap"><table><tr><th>Date</th><th>Client</th><th>Event</th><th>Plan</th><th style="text-align:right">They paid</th><th style="text-align:right">Commission</th><th>Status</th></tr>${(lines || []).map(l => `<tr><td>${fmtDay(l.occurred_at)}</td><td>${l.email ? esc(l.email) : '<span class="mono">' + esc(l.anon_id) + '</span>'}</td><td>${kind[l.kind] || esc(l.kind)}</td><td>${['first', 'renewal'].includes(l.kind) ? planText(l.plan_months, l.paid_cents) : '<span class="sub">—</span>'}</td><td style="text-align:right">${money2(l, l.paid_cents)}</td><td style="text-align:right">${money2(l, l.commission_cents)}</td><td>${esc(st[l.status] ?? l.status)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">No ledger lines in this period.</td></tr>'}</table></div>
+      <div class="sub" style="margin-top:8px">Commission in this view: <b>${money(sumC)}</b></div>`;
+  }
+
   // ── routing ──
   async function render() {
     try {
       let tabs, body;
-      if (S.role === 'admin') { tabs = [['overview', 'Overview'], ['payouts', 'Payouts']]; if (S.tab !== 'payouts') S.tab = 'overview'; body = S.tab === 'payouts' ? await adminPayouts() : await adminOverview(); }
+      if (S.role === 'admin') { const nReq = ((await api.rpc('admin_vendor_requests')) || []).filter(r => r.status === 'pending').length;
+        tabs = [['overview', 'Overview'], ['requests', 'Requests' + (nReq ? ' (' + nReq + ')' : '')], ['ledger', 'Ledger'], ['payouts', 'Payouts']]; if (!['payouts', 'requests', 'ledger'].includes(S.tab)) S.tab = 'overview';
+        body = S.tab === 'payouts' ? await adminPayouts() : S.tab === 'requests' ? await adminRequests() : S.tab === 'ledger' ? await adminLedger() : await adminOverview(); }
       else if (S.role === 'vendor') {
         tabs = [['overview', 'Overview'], ['listing', 'Your listing'], ['referrals', 'Referrals'], ['agreement', 'Agreement']]; if (!S.tab) S.tab = 'overview';
         body = S.tab === 'listing' ? await vendorProfile() : S.tab === 'referrals' ? await vendorReferrals() : S.tab === 'agreement' ? await vendorTerms() : await vendorOverview();
@@ -384,6 +445,14 @@
       const email = document.getElementById('email').value.trim();
       try { await api.signIn(email); loginView(true); } catch (err) { S.msg = { kind: 'err', text: 'Could not send the link. Check the address, or ask us to invite you.' }; loginView(false); }
     }
+    if (e.target.id === 'reqform') {
+      const f = Object.fromEntries(new FormData(e.target).entries());
+      if (f.company_site) { S.reqDone = f.name || 'there'; loginView(false); return; }           // honeypot: pretend success, send nothing
+      S.reqBusy = true; S.reqErr = null; loginView(false);
+      try { await api.requestAccess({ name: f.name, business: f.business, email: f.email, phone: f.phone, website: f.website, about: f.about }); S.reqDone = (f.name || 'there').split(' ')[0]; }
+      catch (err) { S.reqErr = 'Sorry, that didn’t send. Please try again, or email support@unionvault.app.'; }
+      S.reqBusy = false; loginView(false);
+    }
     if (e.target.id === 'profileform') {
       const diff = listingDiff();
       if (S.draft.packages.some(p => p.name.trim() && p.price_type !== 'request' && (p.price_min === '' || (p.price_type === 'range' && (p.price_max === '' || Number(p.price_max) < Number(p.price_min)))))) { S.msg = { kind: 'err', text: 'Please fill in each package’s price (a range needs a highest price at least as high as the lowest).' }; return rerenderListing(); }
@@ -400,6 +469,17 @@
     if (act === 'range') { S.range = el.dataset.range; render(); }
     if (act === 'copy') { e.preventDefault(); try { await navigator.clipboard.writeText(el.dataset.text); el.textContent = 'Copied'; } catch (_) {} }
     if (act === 'accept') { try { await api.rpc('accept_terms', { p_terms: el.dataset.id }); S.msg = { kind: 'ok', text: 'Thank you — terms accepted.' }; } catch (err) { S.msg = { kind: 'err', text: 'Could not record acceptance: ' + (err.message || err) }; } render(); }
+    if (act === 'req-open') { e.preventDefault(); S.reqOpen = true; S.reqDone = null; S.reqErr = null; loginView(false); }
+    if (act === 'req-close' || (act === 'req-bg' && e.target === el)) { S.reqOpen = false; S.reqDone = null; loginView(false); }
+    if (act === 'ledger-partner') { S.ledgerPartner = el.dataset.id; render(); }
+    if (act === 'ledger-period') { S.ledgerPeriod = el.dataset.p; render(); }
+    if (act === 'req-approve' || act === 'req-deny') {
+      const note = (document.getElementById('rn-' + el.dataset.id) || {}).value || '';
+      el.disabled = true;
+      try { await api.reviewRequest(el.dataset.id, act === 'req-approve', note); S.msg = { kind: 'ok', text: act === 'req-approve' ? 'Approved. Their login and listing are created and the invite email is on its way.' : 'Request denied.' }; }
+      catch (err) { S.msg = { kind: 'err', text: 'Could not complete that: ' + (err.message || err) }; }
+      render();
+    }
     if (act === 'stmt') { e.preventDefault(); S.stmt = S.stmt === el.dataset.p ? null : el.dataset.p; render(); }
     if (act === 'payout-create' || act === 'payout-paid' || act === 'payout-void') {
       const say = { created: 'Draft payout created.', nothing_due: 'Nothing is due for that partner (any negative balance carries forward).', exists: 'A payout for that quarter already exists.',

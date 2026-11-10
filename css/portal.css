@@ -112,3 +112,10 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--gold);outline-of
 .price{font:600 20px Georgia,serif;white-space:nowrap}.price small{font:400 12px 'Inter',sans-serif;color:var(--muted)}
 .gal{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}.gal div{aspect-ratio:1;border-radius:10px;background:var(--surface) center/cover}
 @media (max-width:640px){.top{padding:10px 14px}.wrap{padding:16px 14px 50px}.who{width:100%;margin-left:0}.hero .cta{margin-left:0}}
+
+/* pop-up (vendor access request) */
+.mov{position:fixed;inset:0;background:rgba(10,9,8,.55);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto;z-index:50}
+.mcard{position:relative;background:var(--cream);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:26px 26px 22px;width:100%;max-width:560px;text-align:left}
+.mclose{position:absolute;right:14px;top:10px;border:0;background:none;color:var(--muted);font-size:26px;line-height:1;cursor:pointer;width:34px;height:34px;border-radius:8px}
+.mclose:hover{background:var(--surface);color:var(--ink)}
+.login .field{text-align:left}
