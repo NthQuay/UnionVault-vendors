@@ -99,6 +99,10 @@ begin
     j := c.proposed;
     update public.vendor_profiles set
       name             = coalesce(j->>'name', name),
+      mono             = case when j ? 'name' and btrim(j->>'name') <> ''
+                              then upper(left(regexp_replace((regexp_split_to_array(btrim(j->>'name'), '\s+'))[1], '[^[:alnum:]]', '', 'g'), 1)
+                                      || coalesce(left(regexp_replace((regexp_split_to_array(btrim(j->>'name'), '\s+'))[2], '[^[:alnum:]]', '', 'g'), 1), ''))
+                              else mono end,
       category_label   = coalesce(j->>'category_label', category_label),
       area             = coalesce(j->>'area', area),
       hours            = coalesce(j->>'hours', hours),
