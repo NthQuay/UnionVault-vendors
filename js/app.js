@@ -5,6 +5,12 @@
   const C = window.PORTAL_CONFIG, app = document.getElementById('app');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pctText = r => (r == null ? null : Math.round(Number(r) * 100) + '%');
+  // "Month-to-month · $12.99/mo", "3-month · $10.39/mo" … (monthly equivalent of what the client pays per billing period)
+  const planText = (months, cents) => {
+    if (!months) return '<span class="sub">—</span>';
+    const per = cents == null ? '' : ' · ' + '$' + (Number(cents) / months / 100).toFixed(2) + '/mo';
+    return (months === 1 ? 'Month-to-month' : months + '-month') + per;
+  };
   const money = c => (Number(c) < 0 ? '-' : '') + '$' + (Math.abs(Number(c || 0)) / 100).toFixed(2);
   const fmtDay = iso => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
   const fmtWhen = iso => new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
@@ -177,7 +183,7 @@
       <div class="linkbox"><span style="color:var(--muted)">Your referral link</span><br><b id="reflink">${esc(link)}</b> · <a href="#" data-act="copy" data-text="${esc(link)}">Copy</a></div></div>
       <div class="grid">${stat('🧑‍🤝‍🧑', 'Sign-ups', sum.signups, '')}${stat('💳', 'Paying subscribers', sum.active_subscribers, 'active now', 'var(--c-call)')}${stat('💰', 'Referral commission', money(sum.earned_cents), sum.rate == null ? 'Rate to be agreed' : pctText(sum.rate) + ' of referred users’ subscription fees', 'var(--gold)')}${stat('🗓️', 'Awaiting payout', money(sum.unpaid_cents), 'paid quarterly', 'var(--c-email)')}</div>
       <div class="eyebrow">Referred sign-ups</div>
-      <div class="tablewrap"><table><tr><th>Referred user</th><th>Signed up</th><th>Status</th></tr>${(refs || []).map(r => `<tr><td class="mono">${esc(r.anon_id)}</td><td>${fmtDay(r.signed_up_at)}</td><td>${esc(status[r.subscription_status] || r.subscription_status)}</td></tr>`).join('') || '<tr><td colspan="3" class="sub">No sign-ups yet.</td></tr>'}</table></div>
+      <div class="tablewrap"><table><tr><th>Referred user</th><th>Signed up</th><th>Plan</th><th>Status</th></tr>${(refs || []).map(r => { const st = r.cancel_state === 'ended' ? 'Cancelled' : r.cancel_state === 'requested' ? 'Cancelling' : (status[r.subscription_status] || r.subscription_status); return `<tr><td class="mono">${esc(r.anon_id)}</td><td>${fmtDay(r.signed_up_at)}</td><td>${planText(r.plan_months, r.plan_amount_cents)}</td><td>${esc(st)}</td></tr>`; }).join('') || '<tr><td colspan="4" class="sub">No sign-ups yet.</td></tr>'}</table></div>
       <div class="sub" style="margin-top:8px">Referred users are shown by an anonymous ID only — no names or emails.</div>
       <div class="eyebrow">Quarterly statements</div>${await statementsHtml()}`;
   }
@@ -195,9 +201,10 @@
   async function loadStatementLines() {
     const el = document.getElementById('stmtlines'); if (!el || !S.stmt) return;
     const lines = await api.rpc('partner_statement_lines', { p_period: S.stmt });
-    const kind = { payment: 'Payment', reversal: 'Refund / reversal' };
+    const kind = { first: 'First payment', renewal: 'Renewal', reversal: 'Refund / reversal', cancel_requested: 'Cancellation requested', cancelled: 'Subscription cancelled', resumed: 'Subscription resumed' };
+    const money2 = (l, v) => (['first', 'renewal', 'reversal'].includes(l.kind) ? money(v) : '<span class="sub">—</span>');
     el.className = ''; el.style.padding = '0';
-    el.innerHTML = `<table style="background:var(--surface)"><tr><th>Date</th><th>Referred client</th><th>Type</th><th style="text-align:right">They paid</th><th style="text-align:right">Your commission</th></tr>${(lines || []).map(l => `<tr><td>${fmtDay(l.occurred_at)}</td><td class="mono">${esc(l.anon_id)}</td><td>${kind[l.kind] || esc(l.kind)}</td><td style="text-align:right">${money(l.paid_cents)}</td><td style="text-align:right">${money(l.commission_cents)}</td></tr>`).join('') || '<tr><td colspan="5" class="sub">No lines.</td></tr>'}</table>`;
+    el.innerHTML = `<table style="background:var(--surface)"><tr><th>Date</th><th>Referred client</th><th>Event</th><th>Plan</th><th style="text-align:right">They paid</th><th style="text-align:right">Your commission</th></tr>${(lines || []).map(l => `<tr><td>${fmtDay(l.occurred_at)}</td><td class="mono">${esc(l.anon_id)}</td><td>${kind[l.kind] || esc(l.kind)}</td><td>${['first', 'renewal'].includes(l.kind) ? planText(l.plan_months, l.paid_cents) : '<span class="sub">—</span>'}</td><td style="text-align:right">${money2(l, l.paid_cents)}</td><td style="text-align:right">${money2(l, l.commission_cents)}</td></tr>`).join('') || '<tr><td colspan="6" class="sub">No lines.</td></tr>'}</table>`;
   }
 
   // ── listing editor ──
