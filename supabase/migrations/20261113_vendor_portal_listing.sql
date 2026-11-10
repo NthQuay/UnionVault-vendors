@@ -23,7 +23,7 @@ create policy vendor_media_delete on storage.objects for delete to authenticated
   bucket_id = 'vendor-media' and ((storage.foldername(name))[1] = public.my_vendor_id() or public.is_admin()));
 
 -- ── package validation (server-side; the browser checks are only for convenience) ──────────────────────────
-create or replace function public.vendor_packages_ok(p jsonb) returns boolean language plpgsql immutable as $$
+create or replace function public.vendor_packages_ok(p jsonb) returns boolean language plpgsql immutable set search_path = public as $$
 declare e jsonb; t text;
 begin
   if jsonb_typeof(p) <> 'array' or jsonb_array_length(p) > 12 then return false; end if;
@@ -133,6 +133,7 @@ returns table (day date, link text, clicks bigint) language sql stable security 
   where c.vendor_id = public.my_vendor_id() and not c.is_bot
   group by 1, 2 order by 1, 2;
 $$;
+-- STATUS: 20261110-20261113 applied to production on 2026-11-10 (after a 30-check test on a throwaway branch).
 revoke all on function public.vendor_packages_ok(jsonb), public.vendor_clicks_all() from public, anon;
 grant execute on function public.vendor_packages_ok(jsonb), public.vendor_clicks_all() to authenticated;
 
