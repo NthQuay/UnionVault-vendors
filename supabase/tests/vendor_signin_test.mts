@@ -1,5 +1,5 @@
 // Run:  node --experimental-strip-types supabase/tests/vendor_signin_test.mts
-import { signinEmail, isEmail, isSafeLink, SUBJECT, FROM } from '../functions/vendor-signin/email.ts'
+import { signinEmail, isEmail, isSafeLink, SUBJECT, FROM } from '../functions/_shared/vendor-email.ts'
 import assert from 'node:assert/strict'
 const link = 'https://hzafdlfprtzfxtyaebmc.supabase.co/auth/v1/verify?token=abc&type=magiclink&redirect_to=https://vendors.unionvault.app/'
 const m = signinEmail(link, 'ben@storylineceremonies.com.au')

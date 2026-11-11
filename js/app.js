@@ -178,6 +178,7 @@
 
   async function vendorOverview() {
     const { rows, recent, sum, prof } = await loadVendorData();
+    const hasL = sum.has_listing !== false, hasR = sum.referral_enabled !== false;      // what this partner asked for
     const { start, end, days } = rangeBounds(rows), all = S.range === 'all';
     const by = byLinkIn(rows, start, end), total = Object.values(by).reduce((a, b) => a + b, 0);
     const prevEnd = addDays(start, -1), prevStart = addDays(start, -days), prevTotal = totalIn(rows, prevStart, prevEnd);
@@ -190,21 +191,23 @@
     const order = ['website', 'contact', 'call', 'email', 'instagram', 'book'].filter(l => by[l]);
     const live = prof.published ? '✓ Listing live' : '● Not published yet';
     const rate = prof.rating_score ? `<span class="badge">★ ${esc(Number(prof.rating_score).toFixed(1))} · ${esc(prof.rating_count)} reviews</span>` : '';
-    return `<div class="hero"><div class="logo">${prof.logo_path ? `<img src="${esc(photoUrl(prof.logo_path))}" alt="">` : esc(S.avatar)}</div>
-      <div><h1>Welcome back 👋</h1><p>${esc(sum.name)}${prof.category_label ? ' · ' + esc(prof.category_label) : ''}</p><span class="badge">${live}</span>${rate}</div>
-      <button class="cta" data-act="tab" data-tab="listing">View your listing →</button></div>
-    <div class="seg" role="tablist">${RANGES.map(([k, l]) => `<button class="${S.range === k ? 'on' : ''}" data-act="range" data-range="${k}">${l}</button>`).join('')}</div>
+    const clicksHtml = `    <div class="seg" role="tablist">${RANGES.map(([k, l]) => `<button class="${S.range === k ? 'on' : ''}" data-act="range" data-range="${k}">${l}</button>`).join('')}</div>
     <div class="grid">${stat('👆', 'Total clicks', total.toLocaleString('en-AU'), delta)}${stat('🌐', 'Website', by.website || 0, pct(by.website || 0), 'var(--c-web)')}${stat('✉️', 'Contact form', by.contact || 0, pct(by.contact || 0), 'var(--c-contact)')}${stat('📞', 'Calls / emails', (by.call || 0) + (by.email || 0), pct((by.call || 0) + (by.email || 0)), 'var(--c-call)')}</div>
     <div class="two"><div class="card"><h3>Clicks over time</h3><div class="sub">${fDate(start, true)} – ${fDate(end, true)} · ${sr.weekly ? 'weekly' : 'daily'}</div>
       <div class="chartbox" data-chart="1">${total ? chartSvg(sr) : '<div class="sub" style="padding:30px 0">No clicks in this period yet.</div>'}</div></div>
       <div class="card"><h3>Where clicks go</h3><div class="sub">Share by button</div>
         ${order.map(l => `<div class="bar" style="--bc:${LCOL[l]}"><span>${esc(LINKS[l])}</span><div class="t"><i style="width:${total ? Math.round(by[l] / total * 100) : 0}%"></i></div><b>${by[l]}</b></div>`).join('') || '<div class="sub" style="margin-top:10px">Nothing yet.</div>'}
-        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px"><div class="sub">All time</div><span class="n" style="font:600 30px Georgia,serif">${allTime.toLocaleString('en-AU')}</span> <span class="sub">clicks${firstDay ? ' since ' + fDate(firstDay, false) + ' ' + firstDay.getFullYear() : ''}</span>${qrows.length ? `<br><span class="sub">${qrows.join(' · ')}</span>` : ''}</div></div></div>
-    <div class="two even"><div class="card"><h3>Referrals</h3><div class="sub">Couples you’ve sent to Union Vault</div>
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px"><div class="sub">All time</div><span class="n" style="font:600 30px Georgia,serif">${allTime.toLocaleString('en-AU')}</span> <span class="sub">clicks${firstDay ? ' since ' + fDate(firstDay, false) + ' ' + firstDay.getFullYear() : ''}</span>${qrows.length ? `<br><span class="sub">${qrows.join(' · ')}</span>` : ''}</div></div></div>`;
+    const activityHtml = `<div class="card"><h3>Latest activity</h3><table class="act">${(recent || []).slice(0, 5).map(r => `<tr><td><span class="dot" style="--bc:${LCOL[r.link] || 'var(--gold)'}"></span>${esc(LINKS[r.link] || r.link)}</td><td class="mono sub">${esc(r.visitor_id)}</td><td class="sub" style="text-align:right">${ago(r.clicked_at)}</td></tr>`).join('') || '<tr><td class="sub">No clicks yet.</td></tr>'}</table>
+      <div class="sub" style="margin-top:8px">Visitors are shown by an anonymous ID only. IDs differ for each vendor.</div></div>`;
+    return `<div class="hero"><div class="logo">${prof.logo_path ? `<img src="${esc(photoUrl(prof.logo_path))}" alt="">` : esc(S.avatar)}</div>
+      <div><h1>Welcome back 👋</h1><p>${esc(sum.name)}${prof.category_label ? ' · ' + esc(prof.category_label) : ''}</p>${hasL ? `<span class="badge">${live}</span>${rate}` : '<span class="badge">Affiliate partner</span>'}</div>
+      ${hasL ? '<button class="cta" data-act="tab" data-tab="listing">View your listing →</button>' : '<button class="cta" data-act="tab" data-tab="referrals">See your referrals →</button>'}</div>
+    ${hasL ? clicksHtml : ''}
+    <div class="two even"${hasL ? '' : ' style="grid-template-columns:1fr"'}>${hasR ? `<div class="card"><h3>Referrals</h3><div class="sub">Couples you’ve sent to Union Vault</div>
       <div style="display:flex;gap:26px;margin-top:10px;flex-wrap:wrap"><div><div style="font:600 34px Georgia,serif">${sum.signups}</div><div class="sub">sign-ups</div></div><div><div style="font:600 34px Georgia,serif">${sum.active_subscribers}</div><div class="sub">paying</div></div><div><div style="font:600 34px Georgia,serif;color:var(--green)">${money(sum.earned_cents)}</div><div class="sub">commission · ${pctText(sum.rate) ? pctText(sum.rate) + ' of their subscription fees' : 'rate to be agreed'}</div></div></div>
-      <div style="margin-top:10px"><a href="#" data-act="tab" data-tab="referrals">Your referral link and sign-ups →</a></div></div>
-      <div class="card"><h3>Latest activity</h3><table class="act">${(recent || []).slice(0, 5).map(r => `<tr><td><span class="dot" style="--bc:${LCOL[r.link] || 'var(--gold)'}"></span>${esc(LINKS[r.link] || r.link)}</td><td class="mono sub">${esc(r.visitor_id)}</td><td class="sub" style="text-align:right">${ago(r.clicked_at)}</td></tr>`).join('') || '<tr><td class="sub">No clicks yet.</td></tr>'}</table>
-      <div class="sub" style="margin-top:8px">Visitors are shown by an anonymous ID only. IDs differ for each vendor.</div></div></div>`;
+      <div style="margin-top:10px"><a href="#" data-act="tab" data-tab="referrals">Your referral link and sign-ups →</a></div></div>` : ''}
+      ${hasL ? activityHtml : ''}</div>`;
   }
 
   async function vendorReferrals() {
@@ -402,8 +405,8 @@
       <div style="margin:10px 0;font-size:13.5px">${esc(r.about)}</div>
       <div style="margin:0 0 8px">${r.want_listing ? '<span class="chip">Appear as a vendor</span>' : ''}${r.want_affiliate ? '<span class="chip">Affiliate link</span>' : ''}</div>
       <div class="sub" style="display:flex;gap:16px;flex-wrap:wrap"><span>✉️ <a href="mailto:${esc(r.email)}">${esc(r.email)}</a></span><span>📞 ${esc(r.phone)}</span>${r.website ? `<span>🌐 <a href="${/^https?:/.test(r.website) ? esc(r.website) : '#'}" target="_blank" rel="noopener">${esc(r.website)}</a></span>` : ''}</div>
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><input id="rn-${esc(r.id)}" placeholder="Note (optional — included in the email)" style="flex:1;min-width:200px"><button class="btn primary" data-act="req-approve" data-id="${esc(r.id)}">Approve &amp; invite</button><button class="btn" data-act="req-deny" data-id="${esc(r.id)}">Deny</button></div></div>`;
-    return `<div class="head"><div><h1>Vendor requests</h1><div class="sub">Approving creates their login (plus an unpublished listing and/or a referral link, as requested) and emails them a sign-in link.</div></div></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><input id="rn-${esc(r.id)}" placeholder="Note to the applicant (optional — included in the email)" style="flex:1;min-width:200px"><button class="btn primary" data-act="req-approve" data-id="${esc(r.id)}">Approve &amp; invite</button><button class="btn" data-act="req-deny" data-id="${esc(r.id)}" title="Marks it denied and emails the applicant with your note">Deny &amp; email</button></div></div>`;
+    return `<div class="head"><div><h1>Vendor requests</h1><div class="sub">Approving creates their login (plus an unpublished listing and/or a referral link, as requested) and emails them a sign-in link. Denying emails them a short, polite note including yours.</div></div></div>
       ${pend.map(card).join('') || '<div class="card sub">No requests waiting.</div>'}
       ${done.length ? `<div class="eyebrow">Decided</div><div class="tablewrap"><table><tr><th>Business</th><th>Contact</th><th>Decision</th><th>When</th></tr>${done.map(r => `<tr><td><b>${esc(r.business)}</b></td><td>${esc(r.name)} · ${esc(r.email)}</td><td>${r.status === 'approved' ? 'Approved' : 'Denied'}${r.review_note ? ' · <span class="sub">' + esc(r.review_note) + '</span>' : ''}</td><td>${fmtDay(r.reviewed_at)}</td></tr>`).join('')}</table></div>` : ''}`;
   }
@@ -440,7 +443,9 @@
         tabs = [['overview', 'Overview'], ['requests', 'Requests' + (nReq ? ' (' + nReq + ')' : '')], ['ledger', 'Ledger'], ['payouts', 'Payouts']]; if (!['payouts', 'requests', 'ledger'].includes(S.tab)) S.tab = 'overview';
         body = S.tab === 'payouts' ? await adminPayouts() : S.tab === 'requests' ? await adminRequests() : S.tab === 'ledger' ? await adminLedger() : await adminOverview(); }
       else if (S.role === 'vendor') {
-        tabs = [['overview', 'Overview'], ['listing', 'Your listing'], ['referrals', 'Referrals'], ['agreement', 'Agreement']]; if (!S.tab) S.tab = 'overview';
+        const flags = await api.rpc('partner_summary') || {};
+        tabs = [['overview', 'Overview']]; if (flags.has_listing !== false) tabs.push(['listing', 'Your listing']); if (flags.referral_enabled !== false) tabs.push(['referrals', 'Referrals']); tabs.push(['agreement', 'Agreement']);
+        if (!S.tab || !tabs.some(t => t[0] === S.tab)) S.tab = 'overview';
         body = S.tab === 'listing' ? await vendorProfile() : S.tab === 'referrals' ? await vendorReferrals() : S.tab === 'agreement' ? await vendorTerms() : await vendorOverview();
       } else { tabs = []; body = '<div class="note">Your account isn’t linked to a vendor listing yet. Please contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</div>'; }
       app.innerHTML = shell(tabs, body);

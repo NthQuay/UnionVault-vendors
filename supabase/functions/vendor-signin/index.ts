@@ -3,7 +3,7 @@
 // "Union Vault Vendors <vendors@unionvault.app>". We never reveal whether an address exists: the answer is always the same.
 // Deploy with verify_jwt = false (the visitor is not signed in yet). Needs the project secrets RESEND_API_KEY (already set).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { FROM, isEmail, isSafeLink, signinEmail } from './email.ts'
+import { FROM, isEmail, isSafeLink, signinEmail } from '../_shared/vendor-email.ts'
 
 const PORTAL = 'https://vendors.unionvault.app/'
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type, apikey, authorization' }

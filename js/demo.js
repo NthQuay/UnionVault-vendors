@@ -18,8 +18,8 @@ window.PORTAL_DEMO = function (kind) {
       { name: 'Elopement', included: '', price_type: 'request', unit: 'package', note: '', visible: false, popular: false }] };
   const R = {
     is_admin: kind === 'admin',
-    my_vendor_id: 'storyline',
-    partner_summary: kind === 'admin' ? null : { name: 'Storyline Ceremonies', code: 'storyline', rate: 0.2, signups: 19, active_subscribers: 7, earned_cents: 3840, unpaid_cents: 3840, paid_cents: 0 },
+    my_vendor_id: kind === 'affiliate' ? null : 'storyline',
+    partner_summary: kind === 'admin' ? null : { name: kind === 'affiliate' ? 'Nair Films' : 'Storyline Ceremonies', code: kind === 'affiliate' ? 'nair-films' : 'storyline', has_listing: kind !== 'affiliate', referral_enabled: kind !== 'listing', rate: 0.2, signups: 19, active_subscribers: 7, earned_cents: 3840, unpaid_cents: 3840, paid_cents: 0 },
     partner_referrals: [
       { anon_id: 'a4f19c02', signed_up_at: '2026-11-02', subscription_status: 'active', plan_months: 12, plan_amount_cents: 7794, cancel_state: null },
       { anon_id: '7be3d81a', signed_up_at: '2026-10-30', subscription_status: 'trialing', plan_months: null, plan_amount_cents: null, cancel_state: null },
