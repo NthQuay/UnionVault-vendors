@@ -27,7 +27,12 @@
     const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     api = {
       session: async () => (await sb.auth.getSession()).data.session,
-      signIn: async email => { const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/', shouldCreateUser: false } }); if (error) throw error; },
+      // Our own branded sign-in email (vendor-signin function, sent from "Union Vault Vendors"). If that is unreachable,
+      // fall back to Supabase's built-in magic link so nobody is ever locked out.
+      signIn: async email => {
+        try { const r = await fetch(C.supabaseUrl + '/functions/v1/vendor-signin', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: C.supabaseKey }, body: JSON.stringify({ email }) }); if (r.ok) return; } catch (_) { /* fall through */ }
+        const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/', shouldCreateUser: false } }); if (error) throw error;
+      },
       signOut: async () => { await sb.auth.signOut(); location.reload(); },
       rpc: async (name, args) => { const { data, error } = await sb.rpc(name, args || {}); if (error) throw error; return data; },
       select: async (table, o) => {
@@ -57,7 +62,7 @@
     app.innerHTML = `<div class="login"><div class="brand" style="font-size:26px">UnionVault<span class="pill">Vendors</span></div>
       <h1 style="margin-top:28px">Sign in</h1><p>Enter the email address we have for you. We’ll send a one-tap sign-in link.</p>
       ${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}
-      ${sent ? '<div class="note ok">Check your inbox for the sign-in link.</div>' : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" required></div><button class="btn primary" style="width:100%;margin-top:8px">Email me a sign-in link</button></form>`}
+      ${sent ? '<div class="note ok">If that address has a vendor account, a sign-in link is on its way. It can take a minute, and it’s worth checking your spam folder.</div>' : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" required></div><button class="btn primary" style="width:100%;margin-top:8px">Email me a sign-in link</button></form>`}
       <p style="font-size:12px;margin-top:22px">Access is by invitation. If you haven’t been invited, contact <a href="mailto:support@unionvault.app">support@unionvault.app</a>.</p></div>`;
   }
 
