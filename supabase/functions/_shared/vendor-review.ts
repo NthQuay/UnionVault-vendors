@@ -46,7 +46,7 @@ export async function reviewRequest(d: Deps, bearer: string, input: { id?: unkno
 
   // 3. approve: make sure there is a login, then create the partner (and listing)
   let uid: string | null = null
-  const cr = await d.fetch(`${d.sbUrl}/auth/v1/admin/users`, { method: 'POST', headers: sh, body: JSON.stringify({ email: req.email, email_confirm: true }) })
+  const cr = await d.fetch(`${d.sbUrl}/auth/v1/admin/users`, { method: 'POST', headers: sh, body: JSON.stringify({ email: req.email, email_confirm: true, user_metadata: { vendor_portal: true } }) })
   if (cr.ok) uid = (await cr.json())?.id ?? null
   else uid = await rpc('auth_user_id_by_email', { p_email: req.email })            // already has an account (for example as a couple)
   if (typeof uid !== 'string' || !UUID.test(uid)) return fail(502, 'could_not_create_login')

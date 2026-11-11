@@ -50,7 +50,7 @@
   // A stored photo is a storage path (real) or a blob:/data: URL (demo, or just picked this session).
   const photoUrl = p => !p ? '' : /^(blob:|data:)/.test(p) ? p.replace(/'/g, '%27').replace(/"/g, '%22') : `${C.supabaseUrl}/storage/v1/object/public/vendor-media/${p}`;
 
-  const S = { user: null, role: null, tab: null, msg: null, stmt: null, reqOpen: false, reqForm: null, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
+  const S = { user: null, role: null, tab: null, msg: null, stmt: null, loginBusy: false, loginEmail: '', reqOpen: false, reqForm: null, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, userDetail: null, userQuery: '', ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
   const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'UV';
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
     <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
@@ -66,7 +66,9 @@
     app.innerHTML = `<div class="login"><div class="loginlogo">${logoHtml(92)}<span class="pill" style="margin:6px 0 0">Vendors</span></div>
       <h1 style="margin-top:22px">Sign in</h1><p>Enter the email address we have for you. We’ll send a one-tap sign-in link.</p>
       ${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}
-      ${sent ? '<div class="note ok">If that address has a vendor account, a sign-in link is on its way. It can take a minute, and it’s worth checking your spam folder.</div>' : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" required></div><button class="btn primary" style="width:100%;margin-top:8px">Email me a sign-in link</button></form>`}
+      ${S.loginBusy ? `<form id="loginform"><div class="field"><input type="email" id="email" value="${esc(S.loginEmail)}" readonly aria-busy="true"></div><button class="btn primary" style="width:100%;margin-top:8px" disabled><span class="spin" aria-hidden="true"></span>Sending your link…</button><div class="sub" style="margin-top:10px" role="status">Hang tight, this takes a few seconds. Please don’t tap again.</div></form>`
+        : sent ? `<div class="sentbox" role="status"><div class="sentic" aria-hidden="true">✉️</div><b>Check your inbox</b><div class="sub" style="margin-top:4px">If <b>${esc(S.loginEmail)}</b> has a vendor account, a sign-in link is on its way. It can take a minute, and it’s worth checking your spam folder. You don’t need to tap anything else here.</div><a href="#" data-act="login-again" style="font-size:12.5px;display:inline-block;margin-top:10px">Use a different email</a></div>`
+        : `<form id="loginform"><div class="field"><input type="email" id="email" placeholder="you@business.com" autocomplete="email" value="${esc(S.loginEmail)}" required></div><button class="btn primary" style="width:100%;margin-top:8px">Email me a sign-in link</button></form>`}
       <p style="font-size:13px;margin-top:24px">Not a Union Vault vendor yet? <a href="#" data-act="req-open">Request vendor access</a></p>
       <p style="font-size:12px;margin-top:6px">Questions? <a href="mailto:support@unionvault.app">support@unionvault.app</a></p></div>${S.reqOpen ? requestModal() : ''}`;
   }
@@ -411,6 +413,43 @@
       ${done.length ? `<div class="eyebrow">Decided</div><div class="tablewrap"><table><tr><th>Business</th><th>Contact</th><th>Decision</th><th>When</th></tr>${done.map(r => `<tr><td><b>${esc(r.business)}</b></td><td>${esc(r.name)} · ${esc(r.email)}</td><td>${r.status === 'approved' ? 'Approved' : 'Denied'}${r.review_note ? ' · <span class="sub">' + esc(r.review_note) + '</span>' : ''}</td><td>${fmtDay(r.reviewed_at)}</td></tr>`).join('')}</table></div>` : ''}`;
   }
 
+  // Admin: every couple account, current status only. Click an email for that account's full running log.
+  const PHASE = { trial: ['Free trial', 'p-trial'], paying: ['Paying', 'p-paying'], cancelling: ['Cancelling', 'p-cancel'], cancelled: ['Cancelled', 'p-ended'], past_due: ['Payment failed', 'p-cancel'], granted: ['Granted access', 'p-trial'], free: ['Free (trial over)', 'p-ended'] };
+  const phaseChip = p => { const [l, c] = PHASE[p] || [p, 'p-ended']; return `<span class="phase ${c}">${esc(l)}</span>`; };
+  const planName = m => (!m ? '<span class="sub">—</span>' : m === 1 ? 'Month-to-month' : m === 12 ? 'Yearly' : m + '-month');
+  const fmtFull = iso => (iso ? new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
+  const fmtYmd = iso => (iso ? new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+  const EVT = { signup: 'Created account', trial_started: 'Started free trial', subscribed: 'Subscribed', plan_changed: 'Changed plan', payment: 'Payment received', payment_failed: 'Payment failed', cancel_requested: 'Asked to cancel', resumed: 'Resumed subscription', cancelled: 'Subscription ended', coupon: 'Used a coupon' };
+  async function adminUsers() {
+    if (S.userDetail) return adminUserDetail(S.userDetail);
+    const rows = await api.rpc('admin_accounts') || [];
+    const q = (S.userQuery || '').trim().toLowerCase();
+    const list = q ? rows.filter(r => (r.email || '').includes(q)) : rows;
+    const n = p => rows.filter(r => r.phase === p).length;
+    const stat = (v, l) => `<div class="card" style="padding:12px 16px;min-width:110px;flex:1"><div style="font-size:24px;font-family:'Cormorant Garamond',serif">${v}</div><div class="sub">${l}</div></div>`;
+    return `<div class="head"><div><h1>Users</h1><div class="sub">Every couple account and where it is right now. Click an email for their full running log. You get an email each time someone new signs up.</div></div></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${stat(rows.length, 'Accounts')}${stat(n('trial') + n('granted'), 'Free trial')}${stat(n('paying'), 'Paying')}${stat(n('cancelling'), 'Cancelling')}${stat(n('cancelled') + n('free'), 'Cancelled / free')}</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px"><input id="uq" placeholder="Search by email" value="${esc(S.userQuery || '')}" style="flex:1;max-width:320px"><button class="btn" data-act="user-search">Search</button>${q ? '<button class="btn" data-act="user-clear">Clear</button>' : ''}</div>
+      <div class="tablewrap"><table><tr><th>Email</th><th>Signed up</th><th>Status</th><th>Plan</th><th>Subscribed</th><th>Coupon</th></tr>${list.map(r => `<tr><td><a href="#" data-act="user-open" data-id="${esc(r.user_id)}">${esc(r.email || '(no email)')}</a></td><td>${fmtYmd(r.signed_up_at)}</td><td>${phaseChip(r.phase)}</td><td>${planName(r.plan_months)}</td><td>${r.subscribed_at ? fmtYmd(r.subscribed_at) : '<span class="sub">—</span>'}</td><td>${(r.coupons || []).length ? r.coupons.map(c => `<span class="chip">${esc(c)}</span>`).join('') : '<span class="sub">—</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="sub">No accounts match.</td></tr>'}</table></div>`;
+  }
+  async function adminUserDetail(id) {
+    const d = await api.rpc('admin_account_detail', { p_user: id });
+    if (!d) { S.userDetail = null; return adminUsers(); }
+    const row = (l, v) => `<div><div class="sub" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em">${l}</div><div style="font-size:14px;margin-top:2px">${v}</div></div>`;
+    const phaseNote = d.phase === 'trial' ? 'Trial ends ' + fmtYmd(d.trial_ends) : d.phase === 'cancelling' ? 'Ends ' + fmtYmd(d.renews_or_ends) : d.phase === 'paying' ? 'Renews ' + fmtYmd(d.renews_or_ends) : '';
+    const ev = (d.events || []).map(e => `<tr><td style="white-space:nowrap">${fmtFull(e.occurred_at)}</td><td><b>${esc(EVT[e.kind] || e.kind)}</b>${e.detail && e.detail.note ? '<div class="sub">' + esc(e.detail.note) + '</div>' : ''}${e.detail && e.detail.backfill ? '<div class="sub">Recorded from existing data</div>' : ''}</td><td>${e.plan_months ? planName(e.plan_months) : '<span class="sub">—</span>'}</td><td style="text-align:right">${e.amount_cents != null ? money(e.amount_cents) : '<span class="sub">—</span>'}</td><td>${e.coupon ? `<span class="chip">${esc(e.coupon)}</span>` : '<span class="sub">—</span>'}</td></tr>`).join('');
+    return `<div class="head"><div><a href="#" data-act="user-back">← All users</a><h1 style="margin-top:6px">${esc(d.email || '(deleted account)')}</h1></div></div>
+      <div class="card" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px">
+        ${row('Status', phaseChip(d.phase) + (phaseNote ? '<div class="sub" style="margin-top:4px">' + esc(phaseNote) + '</div>' : ''))}
+        ${row('Plan', planName(d.plan_months))}
+        ${row('Signed up', fmtYmd(d.signed_up_at))}
+        ${row('Subscription started', d.subscribed_at ? fmtYmd(d.subscribed_at) : '—')}
+        ${row('Coupon codes', (d.coupons || []).length ? d.coupons.map(c => `<span class="chip">${esc(c)}</span>`).join('') : 'None')}
+      </div>
+      <div class="eyebrow">Running log</div>
+      <div class="tablewrap"><table><tr><th>When</th><th>What happened</th><th>Plan</th><th style="text-align:right">Amount</th><th>Coupon</th></tr>${ev || '<tr><td colspan="5" class="sub">Nothing logged yet.</td></tr>'}</table></div>`;
+  }
+
   // Admin: one partner's referred clients (real emails) and every ledger line
   async function adminLedger() {
     const ov = await api.rpc('admin_payout_overview') || [];
@@ -440,8 +479,8 @@
     try {
       let tabs, body;
       if (S.role === 'admin') { const nReq = ((await api.rpc('admin_vendor_requests')) || []).filter(r => r.status === 'pending').length;
-        tabs = [['overview', 'Overview'], ['requests', 'Requests' + (nReq ? ' (' + nReq + ')' : '')], ['ledger', 'Ledger'], ['payouts', 'Payouts']]; if (!['payouts', 'requests', 'ledger'].includes(S.tab)) S.tab = 'overview';
-        body = S.tab === 'payouts' ? await adminPayouts() : S.tab === 'requests' ? await adminRequests() : S.tab === 'ledger' ? await adminLedger() : await adminOverview(); }
+        tabs = [['overview', 'Overview'], ['users', 'Users'], ['requests', 'Requests' + (nReq ? ' (' + nReq + ')' : '')], ['ledger', 'Ledger'], ['payouts', 'Payouts']]; if (!['payouts', 'requests', 'ledger', 'users'].includes(S.tab)) S.tab = 'overview';
+        body = S.tab === 'payouts' ? await adminPayouts() : S.tab === 'users' ? await adminUsers() : S.tab === 'requests' ? await adminRequests() : S.tab === 'ledger' ? await adminLedger() : await adminOverview(); }
       else if (S.role === 'vendor') {
         const flags = await api.rpc('partner_summary') || {};
         tabs = [['overview', 'Overview']]; if (flags.has_listing !== false) tabs.push(['listing', 'Your listing']); if (flags.referral_enabled !== false) tabs.push(['referrals', 'Referrals']); tabs.push(['agreement', 'Agreement']);
@@ -458,8 +497,11 @@
   app.addEventListener('submit', async e => {
     e.preventDefault();
     if (e.target.id === 'loginform') {
+      if (S.loginBusy) return;                                                   // already sending: ignore a second tap
       const email = document.getElementById('email').value.trim();
-      try { await api.signIn(email); loginView(true); } catch (err) { S.msg = { kind: 'err', text: 'Could not send the link. Check the address, or ask us to invite you.' }; loginView(false); }
+      S.loginEmail = email; S.loginBusy = true; S.msg = null; loginView(false);
+      try { await api.signIn(email); S.loginBusy = false; loginView(true); }
+      catch (err) { S.loginBusy = false; S.msg = { kind: 'err', text: 'Could not send the link. Check the address, or ask us to invite you.' }; loginView(false); }
     }
     if (e.target.id === 'reqform') {
       const raw = Object.fromEntries(new FormData(e.target).entries());
@@ -490,8 +532,13 @@
     if (act === 'range') { S.range = el.dataset.range; render(); }
     if (act === 'copy') { e.preventDefault(); try { await navigator.clipboard.writeText(el.dataset.text); el.textContent = 'Copied'; } catch (_) {} }
     if (act === 'accept') { try { await api.rpc('accept_terms', { p_terms: el.dataset.id }); S.msg = { kind: 'ok', text: 'Thank you — terms accepted.' }; } catch (err) { S.msg = { kind: 'err', text: 'Could not record acceptance: ' + (err.message || err) }; } render(); }
+    if (act === 'login-again') { e.preventDefault(); S.loginEmail = ''; loginView(false); return; }
     if (act === 'req-open') { e.preventDefault(); S.reqOpen = true; S.reqDone = null; S.reqErr = null; S.reqForm = null; loginView(false); }
     if (act === 'req-close' || (act === 'req-bg' && e.target === el)) { S.reqOpen = false; S.reqDone = null; loginView(false); }
+    if (act === 'user-open') { e.preventDefault(); S.userDetail = el.dataset.id; render(); window.scrollTo(0, 0); }
+    if (act === 'user-back') { e.preventDefault(); S.userDetail = null; render(); }
+    if (act === 'user-search') { S.userQuery = (document.getElementById('uq') || {}).value || ''; render(); }
+    if (act === 'user-clear') { S.userQuery = ''; render(); }
     if (act === 'ledger-partner') { S.ledgerPartner = el.dataset.id; render(); }
     if (act === 'ledger-period') { S.ledgerPeriod = el.dataset.p; render(); }
     if (act === 'req-approve' || act === 'req-deny') {

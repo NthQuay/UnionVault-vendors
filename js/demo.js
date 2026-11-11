@@ -64,6 +64,19 @@ window.PORTAL_DEMO = function (kind) {
       { occurred_at: '2026-11-02T02:00:00Z', email: 'liam.test@example.com', anon_id: 'a4f19c02', kind: 'first', plan_months: 12, paid_cents: 7794, commission_cents: 1559, status: 'pending' },
       { occurred_at: '2026-11-03T02:00:00Z', email: 'mandy.s@example.com', anon_id: 'c09e5512', kind: 'cancel_requested', plan_months: null, paid_cents: 0, commission_cents: 0, status: '' },
       { occurred_at: '2026-11-05T02:00:00Z', email: 'new.couple@example.com', anon_id: '7be3d81a', kind: 'reversal', plan_months: null, paid_cents: -2000, commission_cents: -439, status: 'pending' }],
+    admin_accounts: [
+      { user_id: 'u1', email: 'liam.test@example.com', signed_up_at: '2026-10-30T02:10:00Z', phase: 'paying', plan_months: 12, subscribed_at: '2026-11-02T02:00:00Z', coupons: ['WELCOME10'], last_activity: '2026-11-02T02:00:00Z' },
+      { user_id: 'u2', email: 'mandy.s@example.com', signed_up_at: '2026-10-24T05:00:00Z', phase: 'cancelling', plan_months: 3, subscribed_at: '2026-10-25T01:00:00Z', coupons: [], last_activity: '2026-11-03T02:00:00Z' },
+      { user_id: 'u3', email: 'new.couple@example.com', signed_up_at: '2026-11-09T08:30:00Z', phase: 'trial', plan_months: null, subscribed_at: null, coupons: [], last_activity: '2026-11-09T08:30:00Z' },
+      { user_id: 'u4', email: 'old.trial@example.com', signed_up_at: '2026-09-01T08:30:00Z', phase: 'free', plan_months: null, subscribed_at: null, coupons: [], last_activity: '2026-09-01T08:30:00Z' },
+      { user_id: 'u5', email: 'sam.j@example.com', signed_up_at: '2026-08-12T08:30:00Z', phase: 'cancelled', plan_months: 1, subscribed_at: '2026-08-13T01:00:00Z', coupons: ['FRIENDS'], last_activity: '2026-10-13T02:00:00Z' }],
+    admin_account_detail: () => ({ user_id: 'u2', email: 'mandy.s@example.com', signed_up_at: '2026-10-24T05:00:00Z', phase: 'cancelling', plan_months: 3, subscribed_at: '2026-10-25T01:00:00Z', coupons: ['WELCOME10'], trial_ends: '2026-11-07T01:00:00Z', renews_or_ends: '2027-01-25T01:00:00Z',
+      events: [
+        { id: 'e5', kind: 'cancel_requested', occurred_at: '2026-11-03T02:00:00Z', plan_months: 3, amount_cents: null, coupon: null, detail: {} },
+        { id: 'e4', kind: 'payment', occurred_at: '2026-11-08T01:00:00Z', plan_months: 3, amount_cents: 3118, coupon: null, detail: {} },
+        { id: 'e3', kind: 'subscribed', occurred_at: '2026-10-25T01:00:00Z', plan_months: 3, amount_cents: null, coupon: 'WELCOME10', detail: { note: 'Free trial ended, now paying' } },
+        { id: 'e2', kind: 'trial_started', occurred_at: '2026-10-24T05:20:00Z', plan_months: 3, amount_cents: null, coupon: 'WELCOME10', detail: {} },
+        { id: 'e1', kind: 'signup', occurred_at: '2026-10-24T05:00:00Z', plan_months: null, amount_cents: null, coupon: null, detail: { provider: 'email' } }] }),
     review_profile_change: { ok: true }, submit_profile_change: { ok: true }, accept_terms: { ok: true }
   };
   const T = {
