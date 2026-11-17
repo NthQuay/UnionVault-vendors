@@ -58,7 +58,7 @@
   const REFERRAL_PARTNERS = [{ id: 'storyline', name: 'Storyline Ceremonies', agreed: true }, { id: 'jordanleef', name: 'Jordan Leef Photography', agreed: false }];
   const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'UV';
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
-    <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
+    <div class="top"><div class="brand">UnionVault<span class="pill">${S.role === 'admin' ? 'Admin' : 'Vendors'}</span></div>
     <div class="tabs">${tabs.map(([k, l]) => `<button class="tab${S.tab === k ? ' on' : ''}" data-act="tab" data-tab="${k}">${l}</button>`).join('')}</div>
     <div class="who">${esc(S.user && S.user.email)}<span class="av">${esc(S.avatar || '')}</span><a href="#" data-act="signout">Sign out</a></div></div>
     <div class="wrap">${S.msg ? `<div class="note ${S.msg.kind || ''}">${esc(S.msg.text)}</div>` : ''}${body}</div>`;
