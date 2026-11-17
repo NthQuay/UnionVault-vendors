@@ -53,6 +53,12 @@ window.PORTAL_DEMO = function (kind) {
       { id: 'q1', status: 'pending', created_at: new Date(Date.now() - 3 * 3600000).toISOString(), name: 'Sam Carter', business: 'Bloom & Wild Florals', email: 'sam@bloomandwild.example', phone: '0412 345 678', website: 'https://instagram.com/bloomandwild', about: 'Wedding florist in Brisbane and the Gold Coast. Bouquets, ceremony arches and table styling. We have worked with around 80 couples since 2021.', reviewed_at: null, review_note: null, want_listing: true, want_affiliate: true },
       { id: 'q2', status: 'pending', created_at: new Date(Date.now() - 26 * 3600000).toISOString(), name: 'Priya Nair', business: 'Nair Films', email: 'priya@nairfilms.example', phone: '0498 111 222', website: 'https://nairfilms.example', about: 'Wedding videography, highlight films and full-day coverage across South East Queensland.', reviewed_at: null, review_note: null, want_listing: false, want_affiliate: true },
       { id: 'q3', status: 'approved', created_at: new Date(Date.now() - 6 * 86400000).toISOString(), name: 'Jordan Leef', business: 'Jordan Leef Photography', email: 'jordanleef2@gmail.com', phone: '0400 000 000', website: 'https://instagram.com/jordan_leef_photography', about: 'Wedding photographer.', reviewed_at: new Date(Date.now() - 5 * 86400000).toISOString(), review_note: 'Welcome aboard', want_listing: true, want_affiliate: false }],
+    admin_vendor_referral_export: a => (a && a.vendor === 'storyline' ? [
+      { clicked_at: '2026-11-16T11:05:00Z', link: 'instagram', partner1: 'Mia', partner2: 'Jack Thornton', email: 'mia.thornton@example.com' },
+      { clicked_at: '2026-11-14T15:44:00Z', link: 'contact', partner1: 'Priya', partner2: 'Sam Osei', email: 'priya.osei@example.com' },
+      { clicked_at: '2026-11-14T15:42:00Z', link: 'book', partner1: 'Priya', partner2: 'Sam Osei', email: 'priya.osei@example.com' },
+      { clicked_at: '2026-11-09T07:18:00Z', link: 'website', partner1: 'Claire', partner2: 'Daniel Petrov', email: 'claire.petrov@example.com' }
+    ] : []),
     admin_partner_clients: [
       { email: 'liam.test@example.com', anon_id: 'a4f19c02', signed_up_at: '2026-11-02', plan_months: 12, plan_amount_cents: 7794, subscription_status: 'active', cancel_state: null },
       { email: 'mandy.s@example.com', anon_id: 'c09e5512', signed_up_at: '2026-10-24', plan_months: 3, plan_amount_cents: 3118, subscription_status: 'active', cancel_state: 'requested' },

@@ -50,7 +50,12 @@
   // A stored photo is a storage path (real) or a blob:/data: URL (demo, or just picked this session).
   const photoUrl = p => !p ? '' : /^(blob:|data:)/.test(p) ? p.replace(/'/g, '%27').replace(/"/g, '%22') : `${C.supabaseUrl}/storage/v1/object/public/vendor-media/${p}`;
 
-  const S = { user: null, role: null, tab: null, msg: null, stmt: null, loginBusy: false, loginEmail: '', reqOpen: false, reqForm: null, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, userDetail: null, userQuery: '', ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false };
+  const S = { user: null, role: null, tab: null, msg: null, stmt: null, loginBusy: false, loginEmail: '', reqOpen: false, reqForm: null, reqDone: null, reqErr: null, reqBusy: false, ledgerPartner: null, userDetail: null, userQuery: '', ledgerPeriod: null, range: '30', draft: null, orig: null, vendorId: null, uploading: false, exportVendor: null, exportFrom: null, exportTo: null };
+  // Vendors with a SIGNED, WRITTEN agreement to pay Union Vault a commission on bookings referred
+  // through the app (the opposite direction to the referrals/commission_entries machinery above,
+  // which is Union Vault paying the vendor). Today that's Storyline only — hardcoded here rather
+  // than a new table, since this is a single bespoke arrangement, not a general program yet.
+  const REFERRAL_PARTNERS = [{ id: 'storyline', name: 'Storyline Ceremonies', agreed: true }, { id: 'jordanleef', name: 'Jordan Leef Photography', agreed: false }];
   const initials = n => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'UV';
   const shell = (tabs, body) => `${api.demo ? '<div class="demo">Sample data for design review</div>' : ''}
     <div class="top"><div class="brand">UnionVault<span class="pill">Vendors</span></div>
@@ -474,13 +479,34 @@
       <div class="sub" style="margin-top:8px">Commission in this view: <b>${money(sumC)}</b></div>`;
   }
 
+  // Admin: a vendor's clicks matched to the clicking couple's name/email, for a signed
+  // commission-partner vendor only (see REFERRAL_PARTNERS) — used to reconcile bookings.
+  async function adminExport() {
+    if (!S.exportVendor) S.exportVendor = REFERRAL_PARTNERS.find(v => v.agreed).id;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (!S.exportTo) S.exportTo = iso(today);
+    if (!S.exportFrom) S.exportFrom = iso(addDays(today, -29));
+    const fromTs = parse(S.exportFrom).toISOString();
+    const toTs = addDays(parse(S.exportTo), 1).toISOString();
+    const rows = await api.rpc('admin_vendor_referral_export', { vendor: S.exportVendor, from_ts: fromTs, to_ts: toTs }) || [];
+    const couples = new Set(rows.map(r => (r.partner1 || '') + '&' + (r.partner2 || '') + r.email));
+    S._exportRows = rows; // read by the export-csv click handler
+    return `<div class="head"><div><h1>Referral export</h1><div class="sub">Clicks matched to the couple who made them — only for vendors with a signed commission agreement.</div></div></div>
+      <div class="note">Only generate this for a vendor with a signed, written agreement. Everywhere else, click data stays de-identified.</div>
+      <div class="seg" style="margin-top:0">${REFERRAL_PARTNERS.map(v => `<button class="${S.exportVendor === v.id ? 'on' : ''}" ${v.agreed ? `data-act="export-vendor" data-id="${v.id}"` : 'disabled title="No signed agreement yet"'}>${esc(v.name)}${v.agreed ? '' : ' (no agreement)'}</button>`).join('')}</div>
+      <div class="row" style="margin:12px 0"><div class="field"><label>From</label><input type="date" value="${esc(S.exportFrom)}" data-exp="exportFrom"></div><div class="field"><label>To</label><input type="date" value="${esc(S.exportTo)}" data-exp="exportTo"></div></div>
+      <div class="sub" style="margin-bottom:8px">${rows.length} click${rows.length === 1 ? '' : 's'} · ${couples.size} couple${couples.size === 1 ? '' : 's'}</div>
+      <div class="tablewrap"><table><tr><th>Date &amp; time</th><th>Couple</th><th>Link clicked</th></tr>${rows.map(r => `<tr><td>${fmtWhen(r.clicked_at)}</td><td>${esc([r.partner1, r.partner2].filter(Boolean).join(' & ') || '(no name on file)')}<div class="sub">${esc(r.email || '')}</div></td><td><span class="chip">${esc(LINKS[r.link] || r.link)}</span></td></tr>`).join('') || '<tr><td colspan="3" class="sub">No clicks in this range.</td></tr>'}</table></div>
+      <div style="margin-top:12px"><button class="btn primary" data-act="export-csv" ${rows.length ? '' : 'disabled'}>Export CSV</button></div>`;
+  }
+
   // ── routing ──
   async function render() {
     try {
       let tabs, body;
       if (S.role === 'admin') { const nReq = ((await api.rpc('admin_vendor_requests')) || []).filter(r => r.status === 'pending').length;
-        tabs = [['overview', 'Overview'], ['users', 'Users'], ['requests', 'Requests' + (nReq ? ' (' + nReq + ')' : '')], ['ledger', 'Ledger'], ['payouts', 'Payouts']]; if (!['payouts', 'requests', 'ledger', 'users'].includes(S.tab)) S.tab = 'overview';
-        body = S.tab === 'payouts' ? await adminPayouts() : S.tab === 'users' ? await adminUsers() : S.tab === 'requests' ? await adminRequests() : S.tab === 'ledger' ? await adminLedger() : await adminOverview(); }
+        tabs = [['overview', 'Overview'], ['users', 'Users'], ['requests', 'Requests' + (nReq ? ' (' + nReq + ')' : '')], ['ledger', 'Ledger'], ['payouts', 'Payouts'], ['export', 'Export']]; if (!['payouts', 'requests', 'ledger', 'users', 'export'].includes(S.tab)) S.tab = 'overview';
+        body = S.tab === 'payouts' ? await adminPayouts() : S.tab === 'users' ? await adminUsers() : S.tab === 'requests' ? await adminRequests() : S.tab === 'ledger' ? await adminLedger() : S.tab === 'export' ? await adminExport() : await adminOverview(); }
       else if (S.role === 'vendor') {
         const flags = await api.rpc('partner_summary') || {};
         tabs = [['overview', 'Overview']]; if (flags.has_listing !== false) tabs.push(['listing', 'Your listing']); if (flags.referral_enabled !== false) tabs.push(['referrals', 'Referrals']); tabs.push(['agreement', 'Agreement']);
@@ -541,6 +567,16 @@
     if (act === 'user-clear') { S.userQuery = ''; render(); }
     if (act === 'ledger-partner') { S.ledgerPartner = el.dataset.id; render(); }
     if (act === 'ledger-period') { S.ledgerPeriod = el.dataset.p; render(); }
+    if (act === 'export-vendor') { S.exportVendor = el.dataset.id; render(); }
+    if (act === 'export-csv') {
+      const rows = S._exportRows || [];
+      const header = ['Date & time (ISO)', 'Partner 1', 'Partner 2', 'Email', 'Link clicked'];
+      const lines = [header.join(',')].concat(rows.map(r => [r.clicked_at, r.partner1 || '', r.partner2 || '', r.email || '', LINKS[r.link] || r.link].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')));
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'vendor-referrals-' + S.exportVendor + '-' + S.exportFrom + '_to_' + S.exportTo + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
     if (act === 'req-approve' || act === 'req-deny') {
       const note = (document.getElementById('rn-' + el.dataset.id) || {}).value || '';
       el.disabled = true;
@@ -586,6 +622,7 @@
   app.addEventListener('change', e => {
     if (e.target.id === 'file') addFiles(e.target.files, false);
     if (e.target.id === 'logofile') addFiles(e.target.files, true);
+    if (e.target.dataset.exp) { S[e.target.dataset.exp] = e.target.value; render(); }
   });
   app.addEventListener('pointermove', e => { const b = e.target.closest && e.target.closest('[data-chart]'); if (b) chartHover(e, b); });
   app.addEventListener('pointerleave', e => { const t = document.getElementById('ch-tip'); if (t) t.style.opacity = 0; }, true);
