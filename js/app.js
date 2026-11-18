@@ -425,17 +425,35 @@
   const fmtFull = iso => (iso ? new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
   const fmtYmd = iso => (iso ? new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
   const EVT = { signup: 'Created account', trial_started: 'Started free trial', subscribed: 'Subscribed', plan_changed: 'Changed plan', payment: 'Payment received', payment_failed: 'Payment failed', cancel_requested: 'Asked to cancel', resumed: 'Resumed subscription', cancelled: 'Subscription ended', coupon: 'Used a coupon' };
+  const planLabel = m => (m === 1 ? 'Month-to-month' : m === 12 ? 'Yearly' : m + '-month');
   async function adminUsers() {
     if (S.userDetail) return adminUserDetail(S.userDetail);
     const rows = await api.rpc('admin_accounts') || [];
     const q = (S.userQuery || '').trim().toLowerCase();
-    const list = q ? rows.filter(r => (r.email || '').includes(q)) : rows;
+    const statusF = S.userStatusFilter || '', planF = S.userPlanFilter || '', couponF = S.userCouponFilter || '';
+    let list = q ? rows.filter(r => (r.email || '').includes(q)) : rows;
+    if (statusF) list = list.filter(r => r.phase === statusF);
+    if (planF) list = list.filter(r => String(r.plan_months || '') === planF);
+    if (couponF) list = list.filter(r => (r.coupons || []).includes(couponF));
     const n = p => rows.filter(r => r.phase === p).length;
     const stat = (v, l) => `<div class="card" style="padding:12px 16px;min-width:110px;flex:1"><div style="font-size:24px;font-family:'Cormorant Garamond',serif">${v}</div><div class="sub">${l}</div></div>`;
+    // Option lists are built from the accounts actually present, so a filter never
+    // offers a status/plan/coupon with nothing behind it.
+    const statusOpts = Object.keys(PHASE).filter(p => rows.some(r => r.phase === p));
+    const planOpts = [...new Set(rows.map(r => r.plan_months).filter(Boolean))].sort((a, b) => a - b);
+    const couponOpts = [...new Set(rows.flatMap(r => r.coupons || []))].sort();
+    const anyFilter = q || statusF || planF || couponF;
     return `<div class="head"><div><h1>Users</h1><div class="sub">Every couple account and where it is right now. Click an email for their full running log. You get an email each time someone new signs up.</div></div></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${stat(rows.length, 'Accounts')}${stat(n('trial') + n('granted'), 'Free trial')}${stat(n('paying'), 'Paying')}${stat(n('cancelling'), 'Cancelling')}${stat(n('cancelled') + n('free'), 'Cancelled / free')}</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px"><input id="uq" placeholder="Search by email" value="${esc(S.userQuery || '')}" style="flex:1;max-width:320px"><button class="btn" data-act="user-search">Search</button>${q ? '<button class="btn" data-act="user-clear">Clear</button>' : ''}</div>
-      <div class="tablewrap"><table><tr><th>Email</th><th>Signed up</th><th>Status</th><th>Plan</th><th>Subscribed</th><th>Coupon</th></tr>${list.map(r => `<tr><td><a href="#" data-act="user-open" data-id="${esc(r.user_id)}">${esc(r.email || '(no email)')}</a></td><td>${fmtYmd(r.signed_up_at)}</td><td>${phaseChip(r.phase)}</td><td>${planName(r.plan_months)}</td><td>${r.subscribed_at ? fmtYmd(r.subscribed_at) : '<span class="sub">—</span>'}</td><td>${(r.coupons || []).length ? r.coupons.map(c => `<span class="chip">${esc(c)}</span>`).join('') : '<span class="sub">—</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="sub">No accounts match.</td></tr>'}</table></div>`;
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <input id="uq" placeholder="Search by email" value="${esc(S.userQuery || '')}" style="flex:1;min-width:180px;max-width:320px">
+        <button class="btn" data-act="user-search">Search</button>
+        <select data-exp="userStatusFilter" aria-label="Filter by status" style="width:auto"><option value="">All statuses</option>${statusOpts.map(p => `<option value="${p}"${statusF === p ? ' selected' : ''}>${esc(PHASE[p][0])}</option>`).join('')}</select>
+        <select data-exp="userPlanFilter" aria-label="Filter by plan" style="width:auto"><option value="">All plans</option>${planOpts.map(m => `<option value="${m}"${planF === String(m) ? ' selected' : ''}>${esc(planLabel(m))}</option>`).join('')}</select>
+        <select data-exp="userCouponFilter" aria-label="Filter by coupon" style="width:auto"><option value="">All coupons</option>${couponOpts.map(c => `<option value="${esc(c)}"${couponF === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        ${anyFilter ? '<button class="btn" data-act="user-clear">Clear</button>' : ''}
+      </div>
+      <div class="tablewrap"><table><tr><th>Email</th><th>Signed up</th><th>Status</th><th>Plan</th><th>Subscribed</th><th>Coupon</th></tr>${list.map(r => `<tr><td><a href="#" data-act="user-open" data-id="${esc(r.user_id)}">${esc(r.email || '(no email)')}</a></td><td>${fmtYmd(r.signed_up_at)}</td><td>${phaseChip(r.phase)}</td><td>${planName(r.plan_months)}</td><td>${r.subscribed_at ? fmtYmd(r.subscribed_at) : '<span class="sub">—</span>'}</td><td>${(r.coupons || []).length ? r.coupons.map(c => `<span class="chip">${esc(c)}</span>`).join('') : '<span class="sub">—</span>'}</td></tr>`).join('') || `<tr><td colspan="6" class="sub">No accounts match${anyFilter ? ' these filters' : ''}.</td></tr>`}</table></div>`;
   }
   async function adminUserDetail(id) {
     const d = await api.rpc('admin_account_detail', { p_user: id });
@@ -564,7 +582,7 @@
     if (act === 'user-open') { e.preventDefault(); S.userDetail = el.dataset.id; render(); window.scrollTo(0, 0); }
     if (act === 'user-back') { e.preventDefault(); S.userDetail = null; render(); }
     if (act === 'user-search') { S.userQuery = (document.getElementById('uq') || {}).value || ''; render(); }
-    if (act === 'user-clear') { S.userQuery = ''; render(); }
+    if (act === 'user-clear') { S.userQuery = ''; S.userStatusFilter = ''; S.userPlanFilter = ''; S.userCouponFilter = ''; render(); }
     if (act === 'ledger-partner') { S.ledgerPartner = el.dataset.id; render(); }
     if (act === 'ledger-period') { S.ledgerPeriod = el.dataset.p; render(); }
     if (act === 'export-vendor') { S.exportVendor = el.dataset.id; render(); }
